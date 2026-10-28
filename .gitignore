@@ -1,0 +1,10 @@
+# secrets
+.env
+
+# database + filestore backups hold personal data (applicants, resumes, clicks)
+backups/
+*.dump
+
+# Python
+__pycache__/
+*.pyc

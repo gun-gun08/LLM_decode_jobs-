@@ -1,0 +1,7 @@
+{
+    // the "Start local site" task runs when the folder is opened
+    "task.allowAutomaticTasks": "on",
+    "files.exclude": { "**/__pycache__": true },
+    "files.eol": "\n",
+    "python.analysis.extraPaths": ["odoo_addons/llmd_job_aggregator/models"]
+}

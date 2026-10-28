@@ -1,0 +1,4 @@
+{
+    // suggested when the folder is opened: Python (the addon and the tests), Docker (the local containers), XML (the Odoo views and templates)
+    "recommendations": ["ms-python.python", "ms-azuretools.vscode-docker", "redhat.vscode-xml"]
+}

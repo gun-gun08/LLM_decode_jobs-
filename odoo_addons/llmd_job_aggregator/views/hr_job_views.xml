@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hr_job_form_llmd_aggregator" model="ir.ui.view">
+        <field name="name">hr.job.form.llmd.aggregator</field>
+        <field name="model">hr.job</field>
+        <field name="inherit_id" ref="hr.view_hr_job_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='job_posting']" position="inside">
+                <field name="apply_url" widget="url" placeholder="https://www.linkedin.com/jobs/view/..."/>
+                <field name="agg_source"/>
+                <field name="agg_title"/>
+                <field name="agg_fetched"/>
+                <field name="agg_status"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

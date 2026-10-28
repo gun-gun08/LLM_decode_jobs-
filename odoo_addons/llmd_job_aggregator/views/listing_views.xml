@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ======= job sources: honest status of every API / feed ======= -->
+    <record id="llmd_job_source_list" model="ir.ui.view">
+        <field name="name">llmd.job.source.list</field>
+        <field name="model">llmd.job.source</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="kind"/>
+                <field name="enabled"/>
+                <field name="last_status" widget="badge" decoration-success="last_status == 'ok'" decoration-danger="last_status == 'error'" decoration-warning="last_status == 'not_configured'" decoration-info="last_status == 'skipped'"/>
+                <field name="last_count"/>
+                <field name="requests_used"/>
+                <field name="last_run"/>
+                <field name="last_message"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_job_source_form" model="ir.ui.view">
+        <field name="name">llmd.job.source.form</field>
+        <field name="model">llmd.job.source</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="code" readonly="1"/>
+                            <field name="kind" readonly="1"/>
+                            <field name="home_url" widget="url" readonly="1"/>
+                            <field name="enabled"/>
+                        </group>
+                        <group>
+                            <field name="last_status"/>
+                            <field name="last_count"/>
+                            <field name="requests_used"/>
+                            <field name="budget_period"/>
+                            <field name="last_run"/>
+                            <field name="last_message"/>
+                        </group>
+                    </group>
+                    <separator string="How to connect it"/>
+                    <field name="howto" readonly="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_job_source_action" model="ir.actions.act_window">
+        <field name="name">Job sources</field>
+        <field name="res_model">llmd.job.source</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ======= the stored jobs ======= -->
+    <record id="llmd_job_listing_list" model="ir.ui.view">
+        <field name="name">llmd.job.listing.list</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0">
+                <field name="source"/>
+                <field name="posted_type" optional="show"/>
+                <field name="title"/>
+                <field name="company"/>
+                <field name="category_label" optional="show"/>
+                <field name="location"/>
+                <field name="country" optional="hide"/>
+                <field name="region_label" optional="show"/>
+                <field name="india_zone_label" optional="hide"/>
+                <field name="company_hq" optional="hide"/>
+                <field name="company_region_label" optional="hide"/>
+                <field name="india" optional="hide"/>
+                <field name="work_mode" optional="show"/>
+                <field name="job_type" optional="show"/>
+                <field name="years_text" optional="show"/>
+                <field name="skill_ids" widget="many2many_tags" optional="hide"/>
+                <field name="exp_level" optional="hide"/>
+                <field name="function_label" optional="hide"/>
+                <field name="city" optional="hide"/>
+                <field name="courses" optional="hide"/>
+                <field name="roles" optional="hide"/>
+                <field name="posted"/>
+                <field name="apply_url" widget="url"/>
+                <field name="page_url" widget="url" optional="show"/>
+                <field name="also_on" optional="hide"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_job_listing_form" model="ir.ui.view">
+        <field name="name">llmd.job.listing.form</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="title"/>
+                            <field name="company"/>
+                            <field name="location"/>
+                            <field name="countries"/>
+                            <field name="employment_type"/>
+                            <field name="seniority"/>
+                            <field name="india"/>
+                            <field name="city"/>
+                            <field name="job_type"/>
+                            <field name="exp_level"/>
+                            <field name="work_mode"/>
+                            <field name="category_label"/>
+                            <field name="function_label"/>
+                            <field name="country"/>
+                            <field name="region_label"/>
+                            <field name="india_zone_label"/>
+                            <field name="company_hq"/>
+                            <field name="company_region_label"/>
+                            <field name="years_text"/>
+                            <field name="skill_keys"/>
+                            <field name="short_description"/>
+                        </group>
+                        <group string="Skills in Odoo (from this job's own text)">
+                            <field name="technical_skill_ids" widget="many2many_tags"/>
+                            <field name="language_skill_ids" widget="many2many_tags"/>
+                            <field name="soft_skill_ids" widget="many2many_tags"/>
+                        </group>
+                        <group>
+                            <field name="source"/>
+                            <field name="ext_id"/>
+                            <field name="via"/>
+                            <field name="also_on"/>
+                            <field name="full_text"/>
+                            <field name="courses"/>
+                            <field name="roles"/>
+                            <field name="tags"/>
+                            <field name="posted"/>
+                            <field name="apply_url" widget="url"/>
+                            <field name="page_url" widget="url"/>
+                            <field name="fetched_at"/>
+                        </group>
+                    </group>
+                    <field name="description_html"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- search, filters and groups: every job the website shows is one of these records (the website reads them, nothing else) -->
+    <record id="llmd_job_listing_search" model="ir.ui.view">
+        <field name="name">llmd.job.listing.search</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="title"/>
+                <field name="company"/>
+                <field name="location"/>
+                <field name="category_label"/>
+                <field name="region_label"/>
+                <field name="skill_keys" string="Skill"/>
+                <field name="skill_ids" string="Odoo skill"/>
+                <field name="ext_id"/>
+                <filter name="india" string="In India" domain="[('india', '=', True)]"/>
+                <separator/>
+                <filter name="remote" string="Remote" domain="[('work_mode', '=', 'remote')]"/>
+                <filter name="hybrid" string="Hybrid" domain="[('work_mode', '=', 'hybrid')]"/>
+                <filter name="onsite" string="On-site" domain="[('work_mode', '=', 'onsite')]"/>
+                <separator/>
+                <filter name="with_course" string="Matches a course" domain="[('courses', '!=', False)]"/>
+                <filter name="no_link" string="No application link" domain="['|', ('apply_url', '=', False), ('apply_url', '=', '')]"/>
+                <separator/>
+                <filter name="posted_7" string="Posted in the last 7 days" domain="[('posted', '>=', (context_today() + relativedelta(days=-7)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="hidden" string="Hidden (not on the website)" domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="by_category" string="Category" context="{'group_by': 'category_label'}"/>
+                    <filter name="by_company" string="Company" context="{'group_by': 'company'}"/>
+                    <filter name="by_source" string="Source" context="{'group_by': 'source'}"/>
+                    <filter name="by_mode" string="Work mode" context="{'group_by': 'work_mode'}"/>
+                    <filter name="by_region" string="Region" context="{'group_by': 'region_label'}"/>
+                    <filter name="by_zone" string="Region of India" context="{'group_by': 'india_zone_label'}"/>
+                    <filter name="by_company_region" string="Company headquarters region" context="{'group_by': 'company_region_label'}"/>
+                    <filter name="by_country" string="Country" context="{'group_by': 'country'}"/>
+                    <filter name="by_city" string="City" context="{'group_by': 'city'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_job_listing_action" model="ir.actions.act_window">
+        <field name="name">Job board listings</field>
+        <field name="res_model">llmd.job.listing</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="llmd_job_listing_search"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No jobs yet</p><p>The scheduled sync brings the jobs every day: every job the website shows is stored here.</p></field>
+    </record>
+
+    <menuitem id="llmd_job_board_menu" name="Job board" parent="hr_recruitment.menu_hr_recruitment_root" groups="hr_recruitment.group_hr_recruitment_user" sequence="90"/>
+    <!-- no "Job sources" menu (removed on request): the sources still run (the daily scheduled action) -->
+    <menuitem id="llmd_job_listing_menu" name="Job board listings" parent="llmd_job_board_menu" action="llmd_job_listing_action" sequence="20"/>
+
+    <!-- the list of job sources follows board_config.SOURCES (adds the missing ones, removes the retired ones) -->
+    <function model="llmd.job.source" name="_ensure_sources"/>
+
+    <record id="ir_cron_fetch_job_board" model="ir.cron">
+        <field name="name">LLMD: refresh the job board from the job sources</field>
+        <field name="model_id" ref="model_llmd_job_listing"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_fetch()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

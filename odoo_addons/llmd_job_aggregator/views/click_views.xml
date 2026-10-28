@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Recruitment > Apply Clicks: one line for EVERY click on "Apply Now" (time, job, company, source, external job ID, original apply URL, status).
+         A click is only a click: nobody is named here, and it is not an application (see Job Applications for those). -->
+    <record id="llmd_job_click_list" model="ir.ui.view">
+        <field name="name">llmd.job.click.list</field>
+        <field name="model">llmd.job.click</field>
+        <field name="arch" type="xml">
+            <list string="Apply Clicks" create="0" edit="0" decoration-muted="status == 'no_link'" default_order="clicked_at desc">
+                <field name="clicked_at"/>
+                <field name="job_title"/>
+                <field name="company"/>
+                <field name="source"/>
+                <field name="ext_id"/>
+                <field name="apply_url" widget="url" optional="show"/>
+                <field name="application_type" optional="show"/>
+                <field name="posted_type" optional="show"/>
+                <field name="status" widget="badge" decoration-success="status == 'clicked'" decoration-muted="status == 'no_link'"/>
+                <field name="repeat" optional="show"/>
+                <field name="location" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_job_click_form" model="ir.ui.view">
+        <field name="name">llmd.job.click.form</field>
+        <field name="model">llmd.job.click</field>
+        <field name="arch" type="xml">
+            <form string="Apply click" create="0" edit="0">
+                <header>
+                    <field name="status" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="status" invisible="status != 'clicked'">Somebody clicked Apply Now and was sent to the employer's website. We do not know whether they applied there, and we do not know who they are: this is not an application.</div>
+                    <div class="alert alert-warning" role="status" invisible="status != 'no_link'">Somebody clicked Apply Now, but this job has no valid application link, so nobody was sent anywhere.</div>
+                    <group>
+                        <group string="Click">
+                            <field name="clicked_at"/>
+                            <field name="application_type"/>
+                            <field name="repeat"/>
+                        </group>
+                        <group string="Job">
+                            <field name="job_title"/>
+                            <field name="company"/>
+                            <field name="location"/>
+                            <field name="source"/>
+                            <field name="posted_type"/>
+                            <field name="ext_id"/>
+                            <field name="apply_url" widget="url"/>
+                            <field name="listing_id"/>
+                            <field name="hr_job_id"/>
+                        </group>
+                        <group string="Technical" groups="base.group_no_one">
+                            <field name="job_key"/>
+                            <field name="visitor_key"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_job_click_pivot" model="ir.ui.view">
+        <field name="name">llmd.job.click.pivot</field>
+        <field name="model">llmd.job.click</field>
+        <field name="arch" type="xml">
+            <pivot string="Apply Clicks">
+                <field name="job_title" type="row"/>
+                <field name="clicked_at" interval="day" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="llmd_job_click_graph" model="ir.ui.view">
+        <field name="name">llmd.job.click.graph</field>
+        <field name="model">llmd.job.click</field>
+        <field name="arch" type="xml">
+            <graph string="Apply Clicks" type="bar">
+                <field name="clicked_at" interval="day"/>
+                <field name="status"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="llmd_job_click_search" model="ir.ui.view">
+        <field name="name">llmd.job.click.search</field>
+        <field name="model">llmd.job.click</field>
+        <field name="arch" type="xml">
+            <search string="Apply Clicks">
+                <field name="job_title"/>
+                <field name="company"/>
+                <field name="ext_id"/>
+                <field name="source"/>
+                <field name="apply_url"/>
+                <filter name="today" string="Today" domain="[('clicked_at', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)))]"/>
+                <filter name="week" string="Last 7 days" domain="[('clicked_at', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="sent" string="Sent to the employer" domain="[('status', '=', 'clicked')]"/>
+                <filter name="no_link" string="No application link" domain="[('status', '=', 'no_link')]"/>
+                <separator/>
+                <filter name="first" string="First clicks only" domain="[('repeat', '=', False)]"/>
+                <filter name="repeat" string="Repeat clicks" domain="[('repeat', '=', True)]"/>
+                <group>
+                    <filter name="group_job" string="Job" context="{'group_by': 'job_title'}"/>
+                    <filter name="group_company" string="Company" context="{'group_by': 'company'}"/>
+                    <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_day" string="Day" context="{'group_by': 'clicked_at:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_job_click_action" model="ir.actions.act_window">
+        <field name="name">Apply Clicks</field>
+        <field name="res_model">llmd.job.click</field>
+        <field name="view_mode">list,pivot,graph,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No click yet</p>
+            <p>Every click on "Apply Now" of a job is saved here before the visitor is sent to the employer's website.</p>
+        </field>
+    </record>
+
+    <menuitem id="llmd_job_click_menu" name="Apply Clicks" parent="hr_recruitment.menu_hr_recruitment_root" action="llmd_job_click_action"
+              groups="hr_recruitment.group_hr_recruitment_user" sequence="4"/>
+</odoo>

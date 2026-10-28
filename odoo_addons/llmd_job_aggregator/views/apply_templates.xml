@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- /jobs/ext/<id>/apply : OUR application form. What the person types is saved in Odoo (an applicant under Recruitment > Applications, the resume as its attachment and one record of
+         Recruitment > Job Applications) BEFORE the confirmation page is shown. Expects: job, d (see llmd.job.listing.detail_vals()), vals, errors, max_mb. No job-site name is shown. -->
+    <template id="board_apply" name="LLMD: apply for a job">
+        <t t-call="website.layout">
+            <t t-set="additional_title" t-value="'Apply - %s' % d['title']"/>
+            <div id="wrap" class="o_llmd_apply_page">
+                <nav class="navbar navbar-light border-top shadow-sm d-print-none">
+                    <div class="container">
+                        <span class="navbar-brand h4 my-0"><a t-attf-href="/jobs/ext/#{job.id}"><i class="fa fa-long-arrow-left text-primary me-2"/>Back to the job</a></span>
+                    </div>
+                </nav>
+                <div class="container py-4" style="max-width: 760px;">
+                    <h1 class="h2 mb-1">Apply for <t t-out="d['title']"/></h1>
+                    <p class="text-muted mb-4">
+                        <span t-if="d.get('company')" class="fw-semibold" t-out="d['company']"/>
+                        <span t-if="d.get('company') and d.get('location')"> · </span>
+                        <span t-if="d.get('location')" t-out="d['location']"/>
+                    </p>
+                    <div t-if="errors.get('form')" class="alert alert-danger" role="alert" t-out="errors['form']"/>
+                    <form method="post" enctype="multipart/form-data" t-attf-action="/jobs/ext/#{job.id}/apply" class="o_llmd_apply_form" novalidate="novalidate">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <div style="position: absolute; left: -9999px;" aria-hidden="true"><input type="text" name="company_website" tabindex="-1" autocomplete="off"/></div>
+                        <div class="mb-3">
+                            <label for="llmd_name" class="form-label fw-semibold">Full name <span class="text-danger">*</span></label>
+                            <input type="text" id="llmd_name" name="name" t-attf-class="form-control #{'is-invalid' if errors.get('name') else ''}" t-att-value="vals.get('name', '')" maxlength="120" autocomplete="name"/>
+                            <div t-if="errors.get('name')" class="invalid-feedback d-block" t-out="errors['name']"/>
+                        </div>
+                        <div class="mb-3">
+                            <label for="llmd_email" class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+                            <input type="email" id="llmd_email" name="email" t-attf-class="form-control #{'is-invalid' if errors.get('email') else ''}" t-att-value="vals.get('email', '')" maxlength="254" autocomplete="email"/>
+                            <div t-if="errors.get('email')" class="invalid-feedback d-block" t-out="errors['email']"/>
+                        </div>
+                        <div class="mb-3">
+                            <label for="llmd_resume" class="form-label fw-semibold">Resume <span class="text-muted fw-normal">(optional, PDF, DOC or DOCX, up to <t t-out="max_mb"/> MB)</span></label>
+                            <input type="file" id="llmd_resume" name="resume" t-attf-class="form-control #{'is-invalid' if errors.get('resume') else ''}" accept=".pdf,.doc,.docx"/>
+                            <div t-if="errors.get('resume')" class="invalid-feedback d-block" t-out="errors['resume']"/>
+                        </div>
+                        <div class="mb-3">
+                            <label for="llmd_note" class="form-label fw-semibold">Message <span class="text-muted fw-normal">(optional)</span></label>
+                            <textarea id="llmd_note" name="note" rows="4" class="form-control" maxlength="2000" t-out="vals.get('note', '')"/>
+                        </div>
+                        <div class="form-check mb-4">
+                            <input type="checkbox" id="llmd_consent" name="consent" value="1" t-attf-class="form-check-input #{'is-invalid' if errors.get('consent') else ''}" t-att-checked="'checked' if vals.get('consent') else None"/>
+                            <label for="llmd_consent" class="form-check-label">I agree that LLM Decode stores these details to process my application. <span class="text-danger">*</span></label>
+                            <div t-if="errors.get('consent')" class="invalid-feedback d-block" t-out="errors['consent']"/>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg">Submit application</button>
+                        <a t-if="d.get('go_href')" class="btn btn-link ms-2" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Apply on the employer's website <i class="fa fa-external-link ms-1"/></a>
+                    </form>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- /jobs/ext/<id>/applied : only for an application that really is saved (signed link). -->
+    <template id="board_applied" name="LLMD: application received">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Application received</t>
+            <div id="wrap" class="o_llmd_apply_page">
+                <div class="container py-5 text-center" style="max-width: 680px;">
+                    <i class="fa fa-check-circle fa-3x text-success mb-3" title="Application received" role="img"/>
+                    <h1 class="h2">Your application was received</h1>
+                    <p class="lead mb-1">
+                        <t t-if="again">We already had your application for this job, so nothing was added twice.</t>
+                        <t t-else="">Your details for <strong t-out="d['title']"/><t t-if="d.get('company')"> at <t t-out="d['company']"/></t> are saved with LLM Decode.</t>
+                    </p>
+                    <p class="text-muted">Reference #<t t-out="application.id"/></p>
+                    <p t-if="d.get('go_href')" class="mt-4 mb-2">Also applying on the employer's website? You can continue there:</p>
+                    <div>
+                        <a t-if="d.get('go_href')" class="btn btn-primary btn-lg" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Go to the employer's website <i class="fa fa-external-link ms-1"/></a>
+                        <a href="/jobs" class="btn btn-outline-secondary btn-lg ms-2">Back to all jobs</a>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

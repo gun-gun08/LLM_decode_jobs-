@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Recruitment > Job Applications: applicants that an authorized provider integration sent to the API, applicants of Odoo's own form of our positions, and the records of the earlier
+         versions. The clicks on "Apply Now" are NOT here (Recruitment > Apply Clicks): a click is not an application. -->
+    <record id="llmd_job_application_list" model="ir.ui.view">
+        <field name="name">llmd.job.application.list</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <list string="Job Applications" create="0" decoration-success="state in ('submitted', 'confirmed')" decoration-warning="state == 'reported'" decoration-danger="state == 'withdrawn'" default_order="application_date desc">
+                <header>
+                    <button name="action_confirm" type="object" string="Confirm"/>
+                    <button name="action_withdraw" type="object" string="Withdraw"/>
+                    <button name="action_receive" type="object" string="Back to Received"/>
+                </header>
+                <field name="applicant_name"/>
+                <field name="email"/>
+                <field name="job_title"/>
+                <field name="company"/>
+                <field name="department" optional="show"/>
+                <field name="job_type" optional="show"/>
+                <field name="experience_required" optional="show"/>
+                <field name="location" optional="hide"/>
+                <field name="ext_id"/>
+                <field name="application_type" optional="show"/>
+                <field name="posted_type" optional="show"/>
+                <field name="channel" optional="hide"/>
+                <field name="state" widget="badge" decoration-warning="state == 'reported'" decoration-success="state in ('submitted', 'confirmed')" decoration-danger="state == 'withdrawn'"/>
+                <field name="application_date"/>
+                <field name="source" optional="hide"/>
+                <field name="provider_ref" optional="hide"/>
+                <field name="resume_count" string="Resumes" optional="hide"/>
+                <field name="applicant_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_form" model="ir.ui.view">
+        <field name="name">llmd.job.application.form</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <form string="Job Application" create="0">
+                <header>
+                    <button name="action_confirm" type="object" string="Confirm application" class="btn-primary" invisible="state in ('confirmed', 'withdrawn')"/>
+                    <button name="action_withdraw" type="object" string="Withdraw" invisible="state == 'withdrawn'"/>
+                    <button name="action_receive" type="object" string="Back to Received" invisible="state == 'submitted'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="submitted,confirmed" options="{'clickable': '1'}"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_applicant" type="object" class="oe_stat_button" icon="fa-user" invisible="not applicant_id">
+                            <div class="o_stat_info"><span class="o_stat_text">Odoo applicant</span></div>
+                        </button>
+                        <button name="action_open_job" type="object" class="oe_stat_button" icon="fa-briefcase" invisible="not hr_job_id">
+                            <div class="o_stat_info"><span class="o_stat_text">Position</span></div>
+                        </button>
+                        <button name="action_open_listing" type="object" class="oe_stat_button" icon="fa-globe" invisible="not listing_id">
+                            <div class="o_stat_info"><span class="o_stat_text">Job listing</span></div>
+                        </button>
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="state != 'reported'">The applicant said they applied on the employer's website (earlier version of this module). We cannot verify that: use "Confirm application" once it is confirmed.</div>
+                    <group>
+                        <group string="Applicant">
+                            <field name="applicant_name"/>
+                            <field name="email" widget="email"/>
+                            <field name="application_type"/>
+                            <field name="channel"/>
+                            <field name="application_date"/>
+                            <field name="confirmed_date"/>
+                            <field name="confirmed_via"/>
+                            <field name="provider_ref"/>
+                        </group>
+                        <group string="Job">
+                            <field name="job_title"/>
+                            <field name="company"/>
+                            <field name="department"/>
+                            <field name="job_type"/>
+                            <field name="experience_required"/>
+                            <field name="location"/>
+                            <field name="posted_type"/>
+                            <field name="ext_id"/>
+                            <field name="source"/>
+                            <field name="apply_url" widget="url"/>
+                            <field name="resume_count"/>
+                        </group>
+                    </group>
+                    <group string="Technical" groups="base.group_no_one">
+                        <field name="job_key"/>
+                        <field name="identity_key"/>
+                        <field name="active"/>
+                    </group>
+                    <field name="message" placeholder="Note from the provider"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_kanban" model="ir.ui.view">
+        <field name="name">llmd.job.application.kanban</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" create="0" group_create="0" records_draggable="0">
+                <field name="state"/>
+                <templates>
+                    <t t-name="card">
+                        <field name="applicant_name" class="fw-bold fs-5"/>
+                        <field name="job_title" class="d-block"/>
+                        <field name="company" class="d-block text-muted"/>
+                        <div class="mt-2 text-muted small"><field name="application_date" widget="date"/></div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_pivot" model="ir.ui.view">
+        <field name="name">llmd.job.application.pivot</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <pivot string="Job Applications">
+                <field name="job_title" type="row"/>
+                <field name="state" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_graph" model="ir.ui.view">
+        <field name="name">llmd.job.application.graph</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <graph string="Job Applications" type="bar">
+                <field name="application_date" interval="day"/>
+                <field name="state"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_search" model="ir.ui.view">
+        <field name="name">llmd.job.application.search</field>
+        <field name="model">llmd.job.application</field>
+        <field name="arch" type="xml">
+            <search string="Job Applications">
+                <field name="applicant_name" string="Applicant" filter_domain="['|', ('applicant_name', 'ilike', self), ('email', 'ilike', self)]"/>
+                <field name="job_title"/>
+                <field name="company"/>
+                <field name="ext_id"/>
+                <field name="source"/>
+                <field name="provider_ref"/>
+                <filter name="submitted" string="Received" domain="[('state', '=', 'submitted')]"/>
+                <filter name="reported" string="Reported by the applicant (earlier version, not verified)" domain="[('state', '=', 'reported')]"/>
+                <filter name="confirmed" string="Confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter name="withdrawn" string="Withdrawn" domain="[('state', '=', 'withdrawn')]"/>
+                <separator/>
+                <filter name="provider" string="Sent by the job provider" domain="[('channel', '=', 'provider')]"/>
+                <filter name="own" string="Our website (Odoo form)" domain="[('channel', '=', 'own')]"/>
+                <filter name="recruiter" string="Added in Odoo / by e-mail" domain="[('channel', '=', 'recruiter')]"/>
+                <separator/>
+                <filter name="with_resume" string="With a resume" domain="[('applicant_id.attachment_ids', '!=', False)]"/>
+                <filter name="today" string="Today" domain="[('write_date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)))]"/>
+                <filter name="week" string="Last 7 days" domain="[('write_date', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_job" string="Job" context="{'group_by': 'job_title'}"/>
+                    <filter name="group_company" string="Company" context="{'group_by': 'company'}"/>
+                    <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                    <filter name="group_channel" string="Channel" context="{'group_by': 'channel'}"/>
+                    <filter name="group_date" string="Application date" context="{'group_by': 'application_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_job_application_action" model="ir.actions.act_window">
+        <field name="name">Job Applications</field>
+        <field name="res_model">llmd.job.application</field>
+        <field name="view_mode">list,kanban,pivot,graph,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No application yet</p>
+            <p>Applicants appear here when an authorized job provider sends them to the API, or when somebody applies through Odoo's own form of one of our positions. The clicks on "Apply Now" are in Apply Clicks.</p>
+        </field>
+    </record>
+
+    <menuitem id="llmd_job_application_menu" name="Job Applications" parent="hr_recruitment.menu_hr_recruitment_root" action="llmd_job_application_action"
+              groups="hr_recruitment.group_hr_recruitment_user" sequence="5"/>
+
+    <!-- Odoo's own "Recruitment > Applications > All Applications" is hidden: Job Applications above is the one list of submitted applications (and Apply Clicks
+         the one list of clicks). Only the menu item is switched off - its window action, the hr.applicant model, the records, "By Job Positions" and every
+         workflow stay as they are. -->
+    <record id="hr_recruitment.menu_crm_case_categ_all_app" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- The sync log (llmd.job.sync) has no screen any more - removed on request. Every run is still written to it (the website's "Updated ... ago" reads it). -->
+</odoo>

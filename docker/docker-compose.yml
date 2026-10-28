@@ -1,0 +1,54 @@
+# LLM Decode - LOCAL Odoo 19 test instance (nothing here talks to the live site).
+# Odoo is published on 127.0.0.1 only; the database is NOT published at all.
+# Run from the package root:  docker compose --env-file .env -f docker/docker-compose.yml up -d
+# The project name "llmd-local" and its volumes are the same as in the original local_odoo folder: starting from here takes over
+# that existing local database. For a second, separate instance set COMPOSE_PROJECT_NAME and ODOO_PORT in .env.
+name: llmd-local
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - llmd_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    image: odoo:19.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ODOO_PORT:-8070}:8069"
+    environment:
+      HOST: db
+      USER: ${POSTGRES_USER}
+      PASSWORD: ${POSTGRES_PASSWORD}
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY:-}
+      JOOBLE_API_KEY: ${JOOBLE_API_KEY:-}
+      JSEARCH_API_KEY: ${JSEARCH_API_KEY:-}
+      JSEARCH_BASE_URL: ${JSEARCH_BASE_URL:-}
+      LLMD_APPLICATION_API_KEY: ${LLMD_APPLICATION_API_KEY:-}
+      INDEED_FEED_URL: ${INDEED_FEED_URL:-}
+      INDEED_FEED_TOKEN: ${INDEED_FEED_TOKEN:-}
+      NAUKRI_FEED_URL: ${NAUKRI_FEED_URL:-}
+      NAUKRI_FEED_TOKEN: ${NAUKRI_FEED_TOKEN:-}
+    volumes:
+      - llmd_odoo:/var/lib/odoo
+      - ../odoo_addons:/mnt/extra-addons:ro
+      - ../config/odoo.conf:/etc/odoo/odoo.conf:ro
+    command: ["odoo", "-d", "${ODOO_DB}", "--db-filter=^${ODOO_DB}$$"]
+
+volumes:
+  llmd_pgdata:
+  llmd_odoo:

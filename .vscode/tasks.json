@@ -1,0 +1,63 @@
+{
+    // LOCAL site from VS Code. "Start local site" runs by itself when this folder is opened (VS Code asks once: "Allow automatic tasks").
+    // By hand: Ctrl+Shift+B (= Start local site), or Terminal > Run Task... for the others.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start local site",
+            "detail": "Docker Desktop + PostgreSQL + Odoo, then opens http://127.0.0.1:8070/jobs",
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\start_local.ps1"],
+            "group": { "kind": "build", "isDefault": true },
+            "runOptions": { "runOn": "folderOpen" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Update addon (after a code change)",
+            "detail": "installs llmd_job_aggregator from this folder into the local database and restarts Odoo",
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\update_local.ps1"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Stop local site",
+            "detail": "stops Odoo + PostgreSQL (the data is kept)",
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\stop_local.ps1"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Odoo log",
+            "detail": "follows the Odoo server log (Ctrl+C to stop following)",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "--env-file", "${workspaceFolder}\\.env", "-f", "${workspaceFolder}\\docker\\docker-compose.yml", "logs", "-f", "--tail", "100", "odoo"],
+            "isBackground": true,
+            "presentation": { "reveal": "always", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Tests: unit (no Odoo needed)",
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                     "Set-Location '${workspaceFolder}'; foreach ($t in 'categories_test', 'facets_test', 'sources_test', 'language_test', 'summary_test') { Write-Host \"== $t\"; python \"tests\\$t.py\" }"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Tests: job board (local site must be running, ~10 min)",
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '${workspaceFolder}'; . .\\scripts\\env.ps1; python tests\\board_test.py"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": []
+        }
+    ]
+}

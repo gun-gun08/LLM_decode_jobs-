@@ -1,0 +1,4 @@
+# Python packages for the test suites and tools that run on your computer (Python 3.10 or newer).
+# Everything else they use is in the Python standard library; the addon itself runs inside the odoo:19.0 image, which has its own packages.
+#   pip install -r tests\requirements.txt
+requests>=2.31

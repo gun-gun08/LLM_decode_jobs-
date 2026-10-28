@@ -1,0 +1,28 @@
+{
+    'name': 'LLM Decode - Jobs from the job APIs',
+    'summary': 'Job board of real jobs for the course tracks (/jobs), a detail page per job whose Apply Now opens our application form (saved in Odoo Recruitment > Job Applications) next to a tracked link to the employer (Apply Clicks), applicants from authorized provider integrations, and API-filled pages for our own positions',
+    'version': '19.0.32.0.0',
+    'author': 'LLM Decode',
+    'license': 'LGPL-3',
+    'category': 'Human Resources/Recruitment',
+    'depends': ['website_hr_recruitment', 'mail', 'hr_skills'],
+    'data': [
+        'security/ir.model.access.csv',
+        'views/hr_job_views.xml',
+        'views/job_view.xml',
+        'views/templates.xml',
+        'views/board_templates.xml',
+        'views/apply_templates.xml',
+        'views/listing_views.xml',
+        'views/application_views.xml',
+        'views/click_views.xml',
+    ],
+    'assets': {
+        'web.assets_frontend': [                                                              # the Jobs page design (scoped to .o_llmd_board)
+            'llmd_job_aggregator/static/src/css/llmd_jobs.css',
+            'llmd_job_aggregator/static/src/js/llmd_jobs.js',
+        ],
+    },
+    'installable': True,
+    'application': False,
+}

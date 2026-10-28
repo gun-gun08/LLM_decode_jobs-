@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Job detail page of OUR positions: the shared layout (views/job_view.xml) - header, short cards, Read Full Description, one Apply Now card.
+         A page somebody wrote by hand keeps the stock layout (with ONE Apply Now button). -->
+    <template id="job_detail_layout" inherit_id="website_hr_recruitment.detail" name="LLMD: job detail layout">
+        <xpath expr="//div[@itemscope='itemscope']" position="before">
+            <t t-set="llmd" t-value="job.llmd_content()"/>
+            <t t-set="apply_url" t-value="(job.apply_url or '').strip()"/>
+            <t t-set="apply_external" t-value="apply_url[:8] == 'https://' or apply_url[:7] == 'http://'"/>
+        </xpath>
+        <xpath expr="//meta[@itemprop='directApply']" position="attributes">
+            <attribute name="t-att-content">'false' if apply_external else 'true'</attribute>
+        </xpath>
+
+        <!-- the stock header, description and bottom bar are replaced by our layout -->
+        <xpath expr="//section[hasclass('pb32')]" position="attributes">
+            <attribute name="t-if">not llmd.get('on')</attribute>
+        </xpath>
+        <xpath expr="//div[@t-field='job.website_description']" position="attributes">
+            <attribute name="t-if">not llmd.get('on')</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('oe_structure')]" position="attributes">
+            <attribute name="t-if">not llmd.get('on')</attribute>
+        </xpath>
+        <!-- hand-written pages: one Apply Now only -->
+        <xpath expr="//div[hasclass('col-md-3')]" position="replace"/>
+        <xpath expr="//section[hasclass('o_job_bottom_bar')]//a" position="replace">
+            <a t-if="apply_external" role="button" t-attf-href="/jobs/position/#{job.id}/go" target="_blank" rel="noopener noreferrer nofollow" class="btn btn-primary btn-lg o_llmd_apply">Apply Now <i class="fa fa-external-link ms-1"/></a>
+            <a t-else="" role="button" t-attf-href="/jobs/apply/#{slug(job)}" class="btn btn-primary btn-lg o_llmd_apply">Apply Now</a>
+        </xpath>
+
+        <xpath expr="//section[hasclass('pb32')]" position="before">
+            <t t-if="llmd.get('on')">
+                <t t-set="d" t-value="llmd"/>
+                <t t-call="llmd_job_aggregator.job_view"/>
+            </t>
+        </xpath>
+    </template>
+</odoo>

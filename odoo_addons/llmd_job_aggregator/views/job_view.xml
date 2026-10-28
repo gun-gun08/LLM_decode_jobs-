@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ONE job detail layout, used by BOTH the job board (/jobs/ext/<id>) and our own positions (/jobs/<position>).
+         Expects the variable `d` (see llmd.job.listing.detail_vals() / hr.job.llmd_content()) and, on the job board, `similar` (other real jobs like this one).
+         Lavender band with the breadcrumb -> header card (logo initial, categories, title, company, location, salary, job type, posted) -> ONE "Job Overview" card
+         and on the right one sticky Apply Now card -> Similar jobs. Styles: static/src/css/llmd_jobs.css (scoped to .o_llmd_view). -->
+    <template id="job_view" name="LLMD: job detail view (shared)">
+        <link rel="preconnect" href="https://fonts.googleapis.com"/>
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
+        <div class="o_llmd_view">
+            <div t-attf-class="o_llmd_view_band o_llmd_tint_#{d.get('track') or 'none'}" aria-hidden="true"><span class="o_llmd_vblob o_llmd_vblob_1"/><span class="o_llmd_vblob o_llmd_vblob_2"/></div>
+            <div class="container o_llmd_wrap">
+                <nav class="o_llmd_crumbs" aria-label="Breadcrumb">
+                    <a href="/jobs" class="o_llmd_crumb_back"><i class="fa fa-arrow-left" aria-hidden="true"/> Jobs Explorer</a>
+                    <t t-if="d.get('category_href')">
+                        <span class="o_llmd_crumb_sep" aria-hidden="true">/</span>
+                        <a t-att-href="d['category_href']" class="o_llmd_crumb_link" t-out="d['category_label']"/>
+                    </t>
+                    <span class="o_llmd_crumb_sep" aria-hidden="true">/</span>
+                    <span class="o_llmd_crumb_here" aria-current="page" t-out="d['title']"/>
+                </nav>
+                <header class="o_llmd_head">
+                    <span t-attf-class="o_llmd_head_logo o_llmd_tint_#{d.get('track') or 'none'}" aria-hidden="true" t-out="((d.get('company') or d['title'] or '?').strip() or '?')[:1].upper()"/>
+                    <div class="o_llmd_head_main">
+                        <div class="o_llmd_badges" t-if="d.get('labels') or d.get('work_mode')">
+                            <span t-foreach="d.get('labels') or []" t-as="lab" class="o_llmd_label" t-out="lab"/>
+                            <span t-if="d.get('work_mode')" class="o_llmd_mode_pill"><i class="fa fa-laptop" aria-hidden="true"/> <t t-out="d['work_mode']"/></span>
+                        </div>
+                        <h1 class="o_llmd_title" t-out="d['title']" t-att-lang="d.get('title_lang')"/>
+                        <ul class="o_llmd_meta">
+                            <li t-if="d.get('company')"><i class="fa fa-building-o"/><a t-if="d.get('company_href')" class="o_llmd_meta_strong o_llmd_meta_link" t-att-href="d['company_href']" t-out="d['company']"/><span t-else="" class="o_llmd_meta_strong" t-out="d['company']"/></li>
+                            <li t-if="d.get('location')"><i class="fa fa-map-marker"/><span t-out="d['location']"/></li>
+                            <li t-if="d.get('region')"><i class="fa fa-globe"/><span t-out="d['region']"/></li>
+                            <li t-if="d.get('salary')"><i class="fa fa-money"/><span t-out="d['salary']"/></li>
+                            <li t-if="d.get('job_type')"><i class="fa fa-briefcase"/><span t-out="d['job_type']"/></li>
+                            <li t-if="d.get('years')"><i class="fa fa-line-chart"/><span><t t-out="d['years']"/> experience</span></li>
+                            <li t-if="d.get('posted')" class="o_llmd_meta_soft"><i class="fa fa-clock-o"/><span t-out="d['posted']"/></li>
+                        </ul>
+                    </div>
+                </header>
+
+                <div class="row g-4">
+                    <div class="col-lg-8 order-2 order-lg-1">
+                        <div t-if="d.get('source_lang') == 'zh'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer published this job in Chinese and gives no English version. It is shown as written - no machine translation is added, so nothing is changed or made up.</span></div>
+                        <div t-elif="d.get('source_lang') == 'zh-en'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer wrote this job in Chinese and English. It is shown as written - no machine translation is added.</span></div>
+                        <div t-elif="d.get('source_lang') == 'zh-title'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer gives this job's title in Chinese only; the description below is the employer's English text. The title is shown as written - no machine translation is added.</span></div>
+                        <div t-if="d.get('notice')" class="o_llmd_note"><i class="fa fa-info-circle" aria-hidden="true"/><span t-out="d['notice']"/></div>
+                        <section class="o_llmd_card o_llmd_overview">
+                            <span class="o_llmd_sec_icon" aria-hidden="true"><i class="fa fa-file-text-o"/></span>
+                            <h2>Job Overview</h2>
+                            <p t-if="d.get('overview')" t-out="d['overview']"/>
+                            <h3 t-if="d.get('point_groups')" class="o_llmd_sub_h">Key points</h3>
+                            <div t-if="d.get('point_groups')" class="o_llmd_timeline">
+                                <t t-foreach="d['point_groups']" t-as="grp">
+                                    <h4 t-if="grp['heading']" class="o_llmd_tl_head" t-out="grp['heading']"/>
+                                    <ol class="o_llmd_tl" t-att-start="grp['items'][0]['n']">
+                                        <li t-foreach="grp['items']" t-as="pt" class="o_llmd_tl_item">
+                                            <span class="o_llmd_tl_no" aria-hidden="true" t-out="pt['n']"/>
+                                            <p class="o_llmd_tl_txt"><strong t-out="pt['lead']"/><t t-out="pt['rest']"/></p>
+                                        </li>
+                                    </ol>
+                                </t>
+                            </div>
+                            <h3 t-if="d.get('languages')" class="o_llmd_sub_h">Languages</h3>
+                            <div t-if="d.get('languages')" class="o_llmd_langs">
+                                <span t-foreach="d['languages']" t-as="lg" t-attf-class="o_llmd_lang o_llmd_lang_#{lg[1]}"><i class="fa fa-comments-o" aria-hidden="true"/><t t-out="lg[0]"/> <small><t t-if="lg[1] == 'plus'">a plus</t><t t-else="">required</t></small></span>
+                            </div>
+                            <h3 t-if="d.get('skills')" class="o_llmd_sub_h">Skills</h3>
+                            <div t-if="d.get('skills')" class="o_llmd_skills"><span t-foreach="d['skills']" t-as="skill" class="o_llmd_skill" t-out="skill"/></div>
+                            <p t-if="d.get('facts')" class="o_llmd_facts"><i class="fa fa-info-circle" aria-hidden="true"/><span t-out="d['facts']"/></p>
+                        </section>
+                        <p t-if="'from_text' in d and not d['from_text']" class="o_llmd_card o_llmd_nodesc">
+                            <i class="fa fa-file-o" aria-hidden="true"/> No description is available for this job yet. The employer's application page has the details.
+                        </p>
+                    </div>
+
+                    <div class="col-lg-4 order-1 order-lg-2">
+                        <aside class="o_llmd_apply_card">
+                            <span class="o_llmd_apply_icon" aria-hidden="true"><i class="fa fa-paper-plane"/></span>
+                            <h2>Interested in this role?</h2>
+                            <a t-if="d.get('apply_form_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['apply_form_href']">Apply Now</a>
+                            <a t-elif="d.get('go_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">
+                                Apply Now <i class="fa fa-external-link ms-1"/>
+                            </a>
+                            <a t-elif="d.get('internal_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['internal_href']">Apply Now</a>
+                            <t t-else="">
+                                <button type="button" class="btn btn-secondary o_llmd_apply_btn o_llmd_apply disabled" disabled="disabled">Apply Now</button>
+                                <p class="o_llmd_apply_help">A valid application link is not available for this job.</p>
+                            </t>
+                            <p t-if="d.get('apply_form_href')" class="o_llmd_apply_help">Add your details (a resume is optional). Your application is saved in our recruitment system.</p>
+                            <p t-if="d.get('apply_form_href') and d.get('go_href')" class="o_llmd_apply_help mt-2"><a class="o_llmd_employer" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Apply on the employer's website <i class="fa fa-external-link ms-1"/></a></p>
+                            <p t-elif="d.get('go_href')" class="o_llmd_apply_help">You will be taken to the employer's application page.</p>
+                            <ol t-if="d.get('go_href') and not d.get('apply_form_href')" class="o_llmd_steps">
+                                <li><span>1</span>Open the employer's page with the button above</li>
+                                <li><span>2</span>Send your application there</li>
+                                <li><span>3</span>The company gets back to you</li>
+                            </ol>
+                        </aside>
+                    </div>
+                </div>
+
+                <section t-if="similar" class="o_llmd_similar o_llmd_board">
+                    <div class="o_llmd_sec_head">
+                        <h2 class="o_llmd_h2">Similar jobs</h2>
+                        <p>More open roles like this one</p>
+                    </div>
+                    <div class="row g-4 o_llmd_grid">
+                        <t t-foreach="similar" t-as="job"><t t-call="llmd_job_aggregator.job_card"><t t-set="compact" t-value="True"/><t t-set="no_apply" t-value="True"/></t></t>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </template>
+</odoo>
