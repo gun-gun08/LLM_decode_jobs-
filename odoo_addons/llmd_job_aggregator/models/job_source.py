@@ -125,7 +125,11 @@ class LlmdJobSource(models.Model):
                 icp = self.env['ir.config_parameter'].sudo()
                 per_board = int(icp.get_param('llmd_agg.company_boards_per_board') or C.COMPANY_PER_BOARD)
                 per_world = int(icp.get_param('llmd_agg.company_boards_per_board_world') or C.COMPANY_PER_BOARD_WORLD)
-                jobs = S.fetch_company_boards(creds['boards'], self._company_keep, keep_place=lambda loc: F.is_india(loc), per_board=per_board, country='in',
+                boards = creds['boards']
+                part = self.env.context.get('llmd_board_slice')                  # a batch of the scheduled sync: (first, last + 1)
+                if part:
+                    boards = boards[part[0]:part[1]]
+                jobs = S.fetch_company_boards(boards, self._company_keep, keep_place=lambda loc: F.is_india(loc), per_board=per_board, country='in',
                                               listed=self.env.context.get('llmd_listed'), per_board_world=per_world)      # fetch_now hides the jobs the companies closed
             else:
                 raise S.SourceError('this source is not part of the integration')
@@ -133,7 +137,7 @@ class LlmdJobSource(models.Model):
             self.write({'last_run': now, 'last_status': 'error', 'last_count': 0, 'last_message': str(exc)[:250]})
             return []
         except Exception:                                                    # a broken source must never break the board
-            _logger.exception('job source %s failed', self.code)
+            _logger.warning('job source %s failed', self.code, exc_info=True)       # a warning: handled here (an ERROR log trips Odoo's "Run Manually")
             self.write({'last_run': now, 'last_status': 'error', 'last_count': 0, 'last_message': 'unexpected error - see the Odoo log'})
             return []
         self.write({'last_run': now, 'last_status': 'ok', 'last_count': len(jobs), 'last_message': ''})

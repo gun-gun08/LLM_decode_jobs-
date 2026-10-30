@@ -26,6 +26,8 @@ from . import view_helpers as V
 _logger = logging.getLogger(__name__)
 
 SYNC_LOCK = 72940011                                  # PostgreSQL advisory lock id: one job sync at a time
+SYNC_BATCH_SIZE = 3                                   # company job boards per scheduled run (llmd_agg.sync_batch_size): about a minute, far below any time limit
+_BATCH_RUNS = set()                                   # (cron id, run end time) of the scheduled runs that already did their batch (one batch per run)
 
 # kept for the older imports of the controller / tests
 TRACKS = C.TRACKS
@@ -470,7 +472,7 @@ class LlmdJobListing(models.Model):
             try:
                 rec.summary_json = json.dumps(rec._build_summary(), ensure_ascii=False)
             except Exception:                                               # a summary never stops a sync: the page then builds it itself
-                _logger.exception('job %s: the summary could not be made', rec.id)
+                _logger.warning('job %s: the summary could not be made', rec.id, exc_info=True)
                 rec.summary_json = False
 
     def _build_summary(self):
@@ -779,7 +781,10 @@ class LlmdJobListing(models.Model):
         for src in off:                                                     # their Apply Now would open their own page first: not asked at all (no request is spent)
             src.mark_skipped('Off: its Apply Now opens its own page first, and only direct links to the employer are used (llmd_agg.direct_links_only).')
         listed = {}                                                         # company job boards: the ids of every posting each board lists now
+        part = self.env.context.get('llmd_board_slice')                    # a batch of the scheduled sync (see _cron_fetch)
         for src in sources.filtered(lambda s: s.enabled and s.code != 'himalayas') - off:
+            if part and part[0] > 0 and src.code != 'company':
+                continue                                                    # the other sources are read once, with the first batch
             found = src.with_context(llmd_listed=listed).run(queries)
             per_source[src.name] = len(found)
             jobs += found
@@ -787,8 +792,8 @@ class LlmdJobListing(models.Model):
         himalayas = sources.filtered(lambda s: s.code == 'himalayas')
         mode = (icp.get_param('llmd_agg.himalayas_mode') or 'fallback').strip()
         himalayas_used = False
-        if himalayas in off:
-            pass                                                            # direct links only: marked "Off" above
+        if himalayas in off or part:
+            pass                                                            # direct links only: marked "Off" above; a batch never needs the fallback
         elif himalayas and himalayas.enabled and mode != 'off':
             if mode == 'always' or len(jobs) < 20:
                 found = himalayas.run(queries)
@@ -806,7 +811,7 @@ class LlmdJobListing(models.Model):
                 vals = self._prepare(job)
             except Exception as exc:                                       # one broken job from a source must not stop the others
                 errors.append('%s %s: %s' % (job.get('source'), job.get('ext_id'), exc.__class__.__name__))
-                _logger.exception('job sync: job %s %s could not be normalized', job.get('source'), job.get('ext_id'))
+                _logger.warning('job sync: job %s %s could not be normalized', job.get('source'), job.get('ext_id'), exc_info=True)
                 continue
             if vals and not (direct_only and is_board_link(vals['apply_url'])):       # direct links only: a link to a job board's page is never stored
                 prepared.append(vals)
@@ -839,12 +844,12 @@ class LlmdJobListing(models.Model):
                 kept.add(key)
             except Exception as exc:
                 errors.append('%s %s: %s' % (key[0], key[1], exc.__class__.__name__))
-                _logger.exception('job sync: job %s %s could not be saved', key[0], key[1])
+                _logger.warning('job sync: job %s %s could not be saved', key[0], key[1], exc_info=True)
         try:                                                                # the jobs of this run in Odoo's skill system; never stops the sync
             with cr.savepoint():
                 self.browse([existing[k].id for k in kept]).link_odoo_skills()
         except Exception:
-            _logger.exception('job sync: the skills of the jobs could not be linked to Odoo skills (the jobs are saved)')
+            _logger.warning('job sync: the skills of the jobs could not be linked to Odoo skills (the jobs are saved)', exc_info=True)
         # Nothing is hidden unless a source really delivered jobs in this run (no keys / a failing source never empties the board). Then three kinds of jobs are hidden (kept in
         # the database): jobs of a source that is not needed (the Himalayas fallback), jobs that came back under a new ID, and jobs that no source has returned for KEEP_DAYS days.
         stale = self.browse()
@@ -890,7 +895,73 @@ class LlmdJobListing(models.Model):
 
     @api.model
     def _cron_fetch(self):
-        self.fetch_now(trigger='cron')
+        """The scheduled sync (and its "Run Manually"). It never fails as a whole: what happened is written to the system parameter
+        llmd_agg.last_sync_report (Settings > Technical > System Parameters), readable without the server log - when it ran, how many jobs it brought, and
+        every source's status and message. An unexpected error is reported there and logged as a warning (an ERROR log during "Run Manually" makes some
+        Odoo 19 builds fail on their own, hiding the real cause)."""
+        if not self.env.context.get('cron_id'):                             # not run by the scheduler (shell, tests): the whole sync at once
+            return self._sync_all()
+        run_key = (self.env.context['cron_id'], self.env.context.get('cron_end_time'))
+        Cron = self.env['ir.cron']
+        icp = self.env['ir.config_parameter'].sudo()
+        source = self.env['llmd.job.source'].sudo()._ensure_sources().filtered(lambda s: s.code == 'company')
+        creds = source._credentials() if source else None
+        total = len(creds['boards']) if creds else 0
+        size = max(int(icp.get_param('llmd_agg.sync_batch_size') or SYNC_BATCH_SIZE), 1)
+        batches = max(-(-total // size), 1)
+        pos = int(icp.get_param('llmd_agg.sync_batch_pos') or 0)
+        pos = pos if 0 <= pos < total else 0
+        if run_key in _BATCH_RUNS:                                          # this run already did its batch: the next one runs in a new run, at once
+            Cron._commit_progress(0, remaining=batches - pos // size)
+            return None
+        _BATCH_RUNS.add(run_key)
+        part = (pos, pos + size)
+        icp.set_param('llmd_agg.last_sync_report', 'Sync batch %d of %d started: %s UTC (company job boards %d-%d of %d) - running' % (
+            pos // size + 1, batches, fields.Datetime.to_string(fields.Datetime.now()), part[0] + 1, min(part[1], total), total))
+        self.env.cr.commit()                                                # visible at once, and stays if the server stops the run
+        try:
+            stats = self.with_context(llmd_board_slice=part if total else None).fetch_now(trigger='cron')
+            error = ''
+        except Exception as exc:                                            # noqa: BLE001 - reported, never raised
+            _logger.warning('job sync batch failed: %s', exc, exc_info=True)
+            self.env.cr.rollback()
+            stats, error = None, '%s: %s' % (exc.__class__.__name__, exc)
+        nxt = part[1] if part[1] < total else 0
+        icp.set_param('llmd_agg.sync_batch_pos', str(nxt))
+        self._sync_report(stats=stats, error=error, batch=(pos // size + 1, batches))
+        left = batches - nxt // size if nxt else 0
+        Cron._commit_progress(1, remaining=left)                            # 0 left: the whole board is done until the next day
+        return None
+
+    @api.model
+    def _sync_all(self):
+        """The whole sync in one call (outside the scheduler), reported like a scheduled one."""
+        self.env['ir.config_parameter'].sudo().set_param('llmd_agg.last_sync_report', 'Sync started: %s UTC - running' % fields.Datetime.to_string(fields.Datetime.now()))
+        self.env.cr.commit()
+        try:
+            stats = self.fetch_now(trigger='cron')
+            self._sync_report(stats=stats)
+        except Exception as exc:                                            # noqa: BLE001 - reported, never raised
+            _logger.warning('job sync failed: %s', exc, exc_info=True)
+            self.env.cr.rollback()
+            self._sync_report(error='%s: %s' % (exc.__class__.__name__, exc))
+
+    @api.model
+    def _sync_report(self, stats=None, error='', batch=None):
+        """Write the result of a sync (or of one batch of it) to the system parameter llmd_agg.last_sync_report (short plain text, no keys)."""
+        lines = ['Last sync: %s UTC%s' % (fields.Datetime.to_string(fields.Datetime.now()),
+                                          ' - batch %d of %d%s' % (batch[0], batch[1], ' (the whole board is done)' if batch[0] == batch[1] else ', the next one runs at once')
+                                          if batch else '')]
+        if error:
+            lines.append('RESULT: FAILED - %s' % error[:500])
+        elif stats and stats.get('skipped'):
+            lines.append('RESULT: skipped - %s' % stats['skipped'])
+        elif stats:
+            lines.append('RESULT: ok - created %s, updated %s, hidden %s, errors %s, visible jobs now %s' % (
+                stats.get('created'), stats.get('updated'), stats.get('hidden'), stats.get('errors'), stats.get('total_visible')))
+        for src in self.env['llmd.job.source'].sudo().search([]):
+            lines.append('%s: %s (%s jobs)%s' % (src.name, src.last_status or 'never run', src.last_count or 0, (' - ' + src.last_message) if src.last_message else ''))
+        self.env['ir.config_parameter'].sudo().set_param('llmd_agg.last_sync_report', '\n'.join(lines)[:4000])
 
     def action_fetch_now(self):
         self.env['llmd.job.listing'].fetch_now()
