@@ -2,14 +2,11 @@
 <odoo>
     <!-- ============================== /jobs : the landing page (styles: static/src/css/llmd_jobs.css, behaviour: static/src/js/llmd_jobs.js) ==============================
          Hero + search -> categories -> course-matched jobs -> latest jobs -> companies by region -> top 10 countries -> why LLM Decode + FAQ. The full search with
-         its filters is /jobs?view=all (and every results page). Every number is counted from the stored jobs. -->
+         its filters is /jobs/all (and every results page). Every number is counted from the stored jobs. -->
     <template id="landing_page" name="LLMD: job board landing">
         <t t-call="website.layout">
             <t t-set="additional_title">Jobs Explorer</t>
-            <div id="wrap" class="o_llmd_board o_llmd_landing">
-                <link rel="preconnect" href="https://fonts.googleapis.com"/>
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
+            <div id="wrap" class="o_llmd_board o_llmd_landing" t-att-data-focus="focus or None">
 
                 <!-- ================= hero + the global search ================= -->
                 <section class="o_llmd_lhero">
@@ -50,10 +47,10 @@
                                 <h2 class="o_llmd_h2">Explore by job category</h2>
                                 <p>The categories with the most open jobs right now. Every job sits in one category; a new category shows up as soon as a sync brings jobs for it.</p>
                             </div>
-                            <a href="/jobs/categories" class="btn o_llmd_btn_primary o_llmd_explore_all">Explore all <t t-out="category_total"/> categories <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                            <a href="/categories" class="btn o_llmd_btn_primary o_llmd_explore_all">Explore all <t t-out="category_total"/> categories <i class="fa fa-arrow-right" aria-hidden="true"/></a>
                         </div>
                         <div class="o_llmd_catgrid">
-                            <a t-foreach="top_categories" t-as="ct" t-attf-href="/jobs/category/#{ct[0]}" t-attf-class="o_llmd_catcard o_llmd_cat_#{ct[0]}">
+                            <a t-foreach="top_categories" t-as="ct" t-attf-href="/categories/#{ct[0]}" t-attf-class="o_llmd_catcard o_llmd_cat_#{ct[0]}">
                                 <span class="o_llmd_catcard_icon" aria-hidden="true"><i t-attf-class="fa #{ct[3]}"/></span>
                                 <h3 class="o_llmd_catcard_title" t-out="ct[1]"/>
                                 <p class="o_llmd_catcard_text" t-out="ct[2]"/>
@@ -67,24 +64,43 @@
                 <section t-if="courses" class="o_llmd_lsec o_llmd_lsec_tint" id="courses">
                     <div class="container">
                         <div class="o_llmd_lhead">
-                            <h2 class="o_llmd_h2">Jobs matched to your LLM Decode courses</h2>
-                            <p>Pick your course: the jobs below are the roles it prepares you for, the closest match to what the course teaches first.</p>
+                            <h2 class="o_llmd_h2">Learn with LLM Decode, Discover Your Career Opportunities</h2>
+                            <p>Explore our courses, build in-demand skills, sign up to get started, and discover jobs that match your learning goals.</p>
                         </div>
-                        <form action="/jobs#courses" method="get" class="o_llmd_course_pick" role="tablist" aria-label="Your course">
-                            <t t-foreach="courses" t-as="co">
-                                <button type="submit" name="rec" t-att-value="co['code']" role="tab" t-att-aria-selected="'true' if course and co['code'] == course['code'] else 'false'"
-                                        t-attf-class="o_llmd_cpill #{'active' if course and co['code'] == course['code'] else ''}" t-att-data-course="co['code']">
-                                    <i class="fa fa-graduation-cap" aria-hidden="true"/><span class="o_llmd_cpill_name" t-out="co['name']"/><span class="o_llmd_n" t-out="course_counts.get(co['code'], 0)"/>
-                                </button>
-                            </t>
-                        </form>
-                        <div id="llmd_course_matches" class="o_llmd_cm_wrap" aria-live="polite">
-                            <t t-if="course"><t t-call="llmd_job_aggregator.course_matches"/></t>
+                        <!-- the course space: one step at a time - the Start Learning box, the course tabs, the chosen course, its matching jobs ("Back to Courses" returns).
+                             Without the script the links reload /jobs/course-match/<course>[/pick|/jobs] and the same step is rendered here. -->
+                        <div id="llmd_cm_flow" class="o_llmd_cm_flow" t-att-data-step="cm_step">
+                            <div t-if="course" class="o_llmd_cd">
+                                <span class="o_llmd_cd_icon" aria-hidden="true"><i class="fa fa-graduation-cap"/></span>
+                                <div class="o_llmd_cd_text">
+                                    <h3 class="o_llmd_cd_title">Start Learning with LLM Decode</h3>
+                                    <p class="o_llmd_cd_sub">Explore our courses, build in-demand skills, and discover career opportunities that match your learning goals.</p>
+                                </div>
+                                <div class="o_llmd_cd_actions">
+                                    <a t-if="course.get('catalog')" class="btn o_llmd_btn_primary o_llmd_cd_courses" t-att-href="course['catalog']" target="_blank" rel="noopener"><i class="fa fa-book" aria-hidden="true"/> Explore Courses</a>
+                                    <a t-if="course.get('signup')" class="btn o_llmd_btn_ghost o_llmd_cd_signup" t-attf-href="/signup/#{course['code']}" target="_blank" rel="noopener"><i class="fa fa-user-plus" aria-hidden="true"/> Sign Up Free</a>
+                                    <a class="btn o_llmd_btn_ghost o_llmd_cd_jobs" t-attf-href="/jobs/course-match/#{course['code']}/pick" aria-controls="llmd_cm_flow"><i class="fa fa-briefcase" aria-hidden="true"/> Explore Matching Jobs</a>
+                                </div>
+                            </div>
+                            <div class="o_llmd_cm_pickstep">
+                                <p class="o_llmd_cm_step">Choose a course to see what it teaches and the jobs it prepares you for</p>
+                                <form action="/jobs" method="get" class="o_llmd_course_pick" role="tablist" aria-label="Your course">
+                                    <t t-foreach="courses" t-as="co">
+                                        <button type="submit" name="rec" t-att-value="co['code']" role="tab" t-att-aria-selected="'true' if course and co['code'] == course['code'] else 'false'"
+                                                t-attf-class="o_llmd_cpill #{'active' if course and co['code'] == course['code'] else ''}" t-att-data-course="co['code']">
+                                            <i class="fa fa-graduation-cap" aria-hidden="true"/><span class="o_llmd_cpill_name" t-out="co['name']"/><span class="o_llmd_n" t-out="course_counts.get(co['code'], 0)"/>
+                                        </button>
+                                    </t>
+                                </form>
+                            </div>
+                            <div id="llmd_course_matches" class="o_llmd_cm_wrap" aria-live="polite">
+                                <t t-if="course"><t t-call="llmd_job_aggregator.course_matches"/></t>
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- ================= latest jobs: the newest by their real posting date, a category shortcut, "Load More Jobs" (/jobs/latest) ================= -->
+                <!-- ================= latest jobs: the newest by their real posting date, a category shortcut, page numbers (/jobs/latest) ================= -->
                 <section class="o_llmd_lsec" id="latest">
                     <div class="container">
                         <div class="o_llmd_lhead o_llmd_lhead_row">
@@ -95,18 +111,19 @@
                             <p t-if="last_sync" class="o_llmd_updated" t-att-title="'Last sync: %s UTC' % last_sync['at']"><span class="o_llmd_live_dot" aria-hidden="true"/><t t-out="last_sync['text']"/></p>
                         </div>
                         <nav class="o_llmd_lchips" aria-label="Latest jobs by category">
-                            <a href="/jobs#latest" t-attf-class="o_llmd_lchip #{'active' if not latest_cat else ''}" data-cat="" t-att-aria-current="'true' if not latest_cat else None">All jobs <span class="o_llmd_n" t-out="total"/></a>
-                            <a t-foreach="latest_chips" t-as="lc" t-attf-href="/jobs?latest_cat=#{lc[0]}#latest" t-attf-class="o_llmd_lchip #{'active' if lc[0] == latest_cat else ''}" t-att-data-cat="lc[0]" t-att-aria-current="'true' if lc[0] == latest_cat else None"><t t-out="lc[1]"/> <span class="o_llmd_n" t-out="lc[2]"/></a>
+                            <a href="/jobs/latest-jobs" t-attf-class="o_llmd_lchip #{'active' if not latest_cat else ''}" data-cat="" t-att-aria-current="'true' if not latest_cat else None">All jobs <span class="o_llmd_n" t-out="total"/></a>
+                            <a t-foreach="latest_chips" t-as="lc" t-attf-href="/jobs/latest-jobs/#{lc[0]}" t-attf-class="o_llmd_lchip #{'active' if lc[0] == latest_cat else ''}" t-att-data-cat="lc[0]" t-att-aria-current="'true' if lc[0] == latest_cat else None"><t t-out="lc[1]"/> <span class="o_llmd_n" t-out="lc[2]"/></a>
                         </nav>
                         <div class="o_llmd_latest_grid" id="llmd_latest_grid" aria-live="polite">
                             <t t-foreach="latest" t-as="job"><t t-call="llmd_job_aggregator.latest_card"/></t>
                         </div>
                         <div t-if="not latest" class="o_llmd_empty"><p class="o_llmd_empty_title">No jobs here yet.</p><p class="mb-0">New jobs come with every sync.</p></div>
                         <div class="o_llmd_latest_foot">
-                            <p class="o_llmd_latest_count">Showing <span class="o_llmd_latest_shown" t-out="len(latest)"/> of <span class="o_llmd_latest_total" t-out="latest_total"/> jobs ·
-                                <a href="/jobs?view=all" class="o_llmd_latest_all">Search all jobs with filters <i class="fa fa-sliders" aria-hidden="true"/></a></p>
-                            <a t-att-href="latest_more_href" t-attf-class="btn o_llmd_btn_primary o_llmd_load_more" t-att-hidden="None if len(latest) &lt; latest_total else 'hidden'"
-                               t-att-data-cat="latest_cat" t-att-data-page="str(latest_pages + 1)">Load More Jobs <i class="fa fa-angle-down" aria-hidden="true"/></a>
+                            <p class="o_llmd_latest_count">Showing <span class="o_llmd_latest_shown"><t t-call="llmd_job_aggregator.latest_range"><t t-set="page" t-value="latest_page"/></t></span> of <span class="o_llmd_latest_total" t-out="latest_total"/> jobs ·
+                                <a href="/jobs/all" class="o_llmd_latest_all">Search all jobs with filters <i class="fa fa-sliders" aria-hidden="true"/></a></p>
+                            <div class="o_llmd_latest_btns">
+                                <div class="o_llmd_latest_nav"><t t-call="llmd_job_aggregator.latest_pager"><t t-set="page" t-value="latest_page"/><t t-set="pages" t-value="latest_page_total"/><t t-set="nav" t-value="latest_nav"/><t t-set="nav_s" t-value="latest_nav_s"/></t></div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -119,14 +136,17 @@
                                 <h2 class="o_llmd_h2">Companies by region</h2>
                                 <p><t t-out="company_total"/> companies hiring now, grouped by where they have their headquarters. Where a company is based is not where its jobs are: open a company to see all its jobs, in India and abroad.</p>
                             </div>
-                            <a href="/jobs/regions" class="btn o_llmd_btn_ghost o_llmd_explore_all">Explore all <t t-out="region_total"/> regions <i class="fa fa-globe" aria-hidden="true"/></a>
+                            <div class="o_llmd_lhead_btns">
+                                <a href="/companies" class="btn o_llmd_btn_primary o_llmd_explore_all o_llmd_all_companies">View all <t t-out="company_total"/> companies <i class="fa fa-building-o" aria-hidden="true"/></a>
+                                <a href="/regions" class="btn o_llmd_btn_ghost o_llmd_explore_all">Explore all <t t-out="region_total"/> regions <i class="fa fa-globe" aria-hidden="true"/></a>
+                            </div>
                         </div>
                         <div class="o_llmd_hq_tabs" role="tablist" aria-label="Headquarters region">
-                            <a t-foreach="company_regions" t-as="cr" t-attf-href="#hq-#{cr[0]}" role="tab" t-attf-class="o_llmd_hq_tab #{'active' if cr_first else ''}" t-att-aria-selected="'true' if cr_first else 'false'" t-att-data-tab="cr[0]">
+                            <a t-foreach="company_regions" t-as="cr" t-attf-href="/jobs/companies-by-region/#{cr[0]}" role="tab" t-attf-class="o_llmd_hq_tab #{'active' if cr[0] == hq_active else ''}" t-att-aria-selected="'true' if cr[0] == hq_active else 'false'" t-att-data-tab="cr[0]">
                                 <i t-attf-class="fa #{cr[2]}" aria-hidden="true"/><t t-out="cr[1]"/> <span class="o_llmd_n" t-out="len(cr[3])"/>
                             </a>
                         </div>
-                        <div t-foreach="company_regions" t-as="cr" t-attf-id="hq-#{cr[0]}" t-attf-class="o_llmd_hq_panel o_llmd_region_#{cr[0]}" role="tabpanel" t-att-data-panel="cr[0]">
+                        <div t-foreach="company_regions" t-as="cr" t-attf-id="hq-#{cr[0]}" t-attf-class="o_llmd_hq_panel o_llmd_region_#{cr[0]} #{'active' if cr[0] == hq_active else ''}" role="tabpanel" t-att-data-panel="cr[0]">
                             <h3 class="o_llmd_hq_title"><i t-attf-class="fa #{cr[2]}" aria-hidden="true"/> <t t-out="cr[1]"/></h3>
                             <div class="o_llmd_cogrid">
                                 <t t-foreach="cr[3][:12]" t-as="co"><t t-call="llmd_job_aggregator.company_card"/></t>
@@ -150,7 +170,7 @@
                                 <h2 class="o_llmd_h2">Top 10 Countries Hiring</h2>
                                 <p>The countries with the most open jobs right now - on-site, hybrid and remote, at Indian and international companies.</p>
                             </div>
-                            <a href="/jobs/countries" class="btn o_llmd_btn_ghost o_llmd_explore_all">Explore All Countries (<t t-out="all_country_total"/>) <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                            <a href="/locations" class="btn o_llmd_btn_ghost o_llmd_explore_all">Explore All Countries (<t t-out="all_country_total"/>) <i class="fa fa-arrow-right" aria-hidden="true"/></a>
                         </div>
                         <div class="o_llmd_countrygrid">
                             <t t-foreach="top_countries" t-as="cn"><t t-call="llmd_job_aggregator.country_card"/></t>
@@ -195,7 +215,7 @@
                                 <div class="o_llmd_why_grid">
                                     <div class="o_llmd_why_item"><span class="o_llmd_why_icon" aria-hidden="true"><i class="fa fa-graduation-cap"/></span><h3>Course-based discovery</h3><p>Each LLM Decode course leads to the roles it prepares you for; jobs are ranked by what the course actually teaches.</p></div>
                                     <div class="o_llmd_why_item"><span class="o_llmd_why_icon" aria-hidden="true"><i class="fa fa-th-large"/></span><h3>One combined search</h3><p>Jobs from the working sources in one list, with duplicates removed and distinct openings kept.</p></div>
-                                    <div class="o_llmd_why_item"><span class="o_llmd_why_icon" aria-hidden="true"><i class="fa fa-external-link"/></span><h3>Apply at the source</h3><p>Apply Now opens the company's own application page; we only count the click.</p></div>
+                                    <div class="o_llmd_why_item"><span class="o_llmd_why_icon" aria-hidden="true"><i class="fa fa-external-link"/></span><h3>Apply at the source</h3><p>Apply Now opens the company's own application page; we note the click with your account.</p></div>
                                     <div class="o_llmd_why_item"><span class="o_llmd_why_icon" aria-hidden="true"><i class="fa fa-sliders"/></span><h3>Filters that tell the truth</h3><p>Every filter shows real counts; data the sources do not give, like salary or company size, is never guessed.</p></div>
                                 </div>
                             </div>
@@ -204,7 +224,7 @@
                                 <details class="o_llmd_faq_item"><summary>How are jobs matched to my course? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Each course leads to a set of job roles (for example Account Executive or Machine Learning Engineer), worked out from the course's own name and description. The jobs with those roles are matched, and the ones that need most of what the course teaches - its lessons and skills - come first.</p></details>
                                 <details class="o_llmd_faq_item"><summary>How do I search for jobs? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Type a job title, skill, keyword or company and, if you like, a city or country. On the results page the filters on the left narrow the list: experience, work mode, job type, skills, company and more.</p></details>
                                 <details class="o_llmd_faq_item"><summary>Where do I apply? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Apply Now takes you to the company's own application page, where you apply directly. Opening that page is not an application: only what you submit on the company's site is.</p></details>
-                                <details class="o_llmd_faq_item"><summary>Why does Apply Now open another website? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>The jobs come from the companies' own job boards, so the application lives there. LLM Decode only notes that the button was clicked, never your details.</p></details>
+                                <details class="o_llmd_faq_item"><summary>Why does Apply Now open another website? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>The jobs come from the companies' own job boards, so the application lives there. You sign in once with your LLM Decode account, and we note which job you opened (with your name and e-mail) - the application itself happens on the company's site.</p></details>
                                 <details class="o_llmd_faq_item"><summary>How fresh are the jobs? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>The board is updated every day. A job that its source no longer lists is taken off the board.</p></details>
                             </div>
                         </div>
@@ -216,7 +236,8 @@
 
     <!-- the course-matched jobs of one course (in the landing page, and alone from /jobs/course-matches when the course selector changes) -->
     <template id="course_matches" name="LLMD: course-matched jobs">
-        <div class="o_llmd_cm" t-att-data-course="course['code']">
+        <t t-set="rec_shown" t-value="min((rec_page or 1) * 12, recs['total'])"/>
+        <div class="o_llmd_cm" t-att-data-course="course['code']" t-att-data-signup="course.get('signup') or None" t-att-data-more="'1' if rec_shown &lt; recs['total'] else '0'">
             <div class="o_llmd_cm_head">
                 <div class="o_llmd_cm_text">
                     <h3 class="o_llmd_cm_title" t-out="course['name']"/>
@@ -224,21 +245,35 @@
                     <p t-if="course.get('terms')" class="o_llmd_cm_terms"><span class="o_llmd_cm_terms_label">What it teaches</span>
                         <span t-foreach="course['terms'][:8]" t-as="tk" class="o_llmd_term" t-out="term_labels.get(tk, tk)"/></p>
                 </div>
-                <a t-if="recs['total']" class="btn o_llmd_btn_primary" t-attf-href="/jobs/course/#{course['code']}">View all <t t-out="recs['total']"/> course-matched jobs <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                <div class="o_llmd_cm_actions">
+                    <a t-if="course.get('url')" class="btn o_llmd_btn_ghost o_llmd_cm_visit" t-att-href="course['url']" target="_blank" rel="noopener"><i class="fa fa-graduation-cap" aria-hidden="true"/> Visit Course</a>
+                    <a t-if="course.get('signup')" class="btn o_llmd_btn_ghost o_llmd_cm_signup" t-attf-href="/signup/#{course['code']}" target="_blank" rel="noopener"><i class="fa fa-user-plus" aria-hidden="true"/> Sign Up Free</a>
+                    <a class="btn o_llmd_btn_primary o_llmd_cm_find" t-attf-href="/jobs/course-match/#{course['code']}/jobs">Find Matching Jobs <t t-if="recs['total']">(<t t-out="recs['total']"/>)</t> <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                </div>
             </div>
-            <div t-if="recs['jobs']" class="row g-3 o_llmd_grid">
+            <div class="o_llmd_cm_results">
+            <div class="o_llmd_cm_bar">
+                <a class="btn o_llmd_btn_ghost o_llmd_cm_back" t-attf-href="/jobs/course-match/#{course['code']}/pick"><i class="fa fa-arrow-left" aria-hidden="true"/> Back to Courses</a>
+            <p t-if="recs['total']" class="o_llmd_cm_count">Showing <span class="o_llmd_cm_shown" t-out="rec_shown"/> of <t t-out="recs['total']"/> jobs matching
+                <strong t-out="course['name']"/> · <a t-attf-href="/jobs/course/#{course['code']}" class="o_llmd_latest_all">Search and filter these jobs <i class="fa fa-sliders" aria-hidden="true"/></a></p>
+            </div>
+            <div t-if="recs['jobs']" id="llmd_cm_jobs" class="row g-3 o_llmd_grid">
                 <t t-foreach="recs['jobs']" t-as="rj"><t t-set="job" t-value="rj[0]"/><t t-set="matched" t-value="rj[1]"/><t t-call="llmd_job_aggregator.job_card"><t t-set="compact" t-value="True"/></t></t>
             </div>
-            <div t-else="" class="o_llmd_empty">
+            <div t-else="" id="llmd_cm_jobs" class="o_llmd_empty">
                 <span class="o_llmd_empty_icon" aria-hidden="true"><i class="fa fa-search"/></span>
                 <p class="o_llmd_empty_title">No open job matches this course right now.</p>
                 <p class="mb-0">New jobs are added every day; try another course or the search above.</p>
+            </div>
+            <div t-if="rec_shown &lt; recs['total']" class="o_llmd_latest_foot">
+                <a t-attf-href="/jobs/course-match/#{course['code']}/jobs/page/#{(rec_page or 1) + 1}" class="btn o_llmd_btn_primary o_llmd_cm_more" t-att-data-page="str((rec_page or 1) + 1)">Load More Jobs <i class="fa fa-angle-down" aria-hidden="true"/></a>
+            </div>
             </div>
         </div>
     </template>
 
 
-    <!-- ============================== the results: /jobs?..., /jobs/category|company|location|role/<slug> ==============================
+    <!-- ============================== the results: /jobs/<filters>, /companies|categories|departments|locations|regions/<slug>/<filters>, /jobs/role|course/<slug>/<filters> ==============================
          Breadcrumbs, heading, count and the keyword + location search on top; the companies of these results; the filters on the left (a drawer on small
          screens: "Apply Filters" shows how many jobs it will give before it is pressed); the jobs on the right with sorting, chips and pages. -->
     <template id="results_page" name="LLMD: job results">
@@ -246,22 +281,20 @@
             <t t-set="additional_title" t-value="scope['title']"/>
             <t t-set="mode_icons" t-value="{'remote': 'fa-wifi', 'hybrid': 'fa-building-o', 'onsite': 'fa-map-marker'}"/>
             <t t-set="kind" t-value="scope['kind']"/>
-            <div id="wrap" class="o_llmd_board o_llmd_results_page">
-                <link rel="preconnect" href="https://fonts.googleapis.com"/>
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
+            <div id="wrap" t-attf-class="o_llmd_board o_llmd_results_page #{'o_llmd_all_page' if own_page else ''}">
 
                 <section class="o_llmd_rband">
                     <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/></div>
                     <div class="container o_llmd_rband_in">
                         <nav class="o_llmd_crumbs" aria-label="Breadcrumb">
+                            <t t-if="scope.get('home')"><a href="/" class="o_llmd_crumb_link">Home</a><span class="o_llmd_crumb_sep" aria-hidden="true">/</span></t>
                             <a href="/jobs" class="o_llmd_crumb_link">Jobs Explorer</a>
                             <t t-if="scope.get('crumb')">
                                 <span class="o_llmd_crumb_sep" aria-hidden="true">/</span>
                                 <a t-att-href="scope['crumb'][1]" class="o_llmd_crumb_link" t-out="scope['crumb'][0]"/>
                             </t>
                             <span class="o_llmd_crumb_sep" aria-hidden="true">/</span>
-                            <span class="o_llmd_crumb_here" aria-current="page" t-out="scope.get('label') or ('Search' if state['q'] or state['location'] else 'All jobs')"/>
+                            <span class="o_llmd_crumb_here" aria-current="page" t-out="scope.get('here') or scope.get('label') or ('Search' if state['q'] or state['location'] else 'All jobs')"/>
                         </nav>
                         <div class="o_llmd_rhead">
                             <span t-if="kind == 'company'" class="o_llmd_rhead_icon o_llmd_rhead_logo" aria-hidden="true" t-out="scope.get('initial')"/>
@@ -270,14 +303,16 @@
                                 <h1 class="o_llmd_rtitle" t-out="scope['title']"/>
                                 <p class="o_llmd_rdesc" t-out="scope['description']"/>
                                 <div t-if="kind == 'course' and course" class="o_llmd_course_head">
+                                    <p t-if="course.get('subtitle')" class="o_llmd_cm_sub" t-out="course['subtitle']"/>
                                     <p t-if="course.get('terms')" class="o_llmd_cm_terms"><span class="o_llmd_cm_terms_label">What it teaches</span>
                                         <span t-foreach="course['terms'][:8]" t-as="tk" class="o_llmd_term" t-out="term_labels.get(tk, tk)"/></p>
-                                    <a class="o_llmd_course_change" t-attf-href="/jobs?rec=#{course['code']}#courses"><i class="fa fa-exchange" aria-hidden="true"/> Choose another course</a>
+                                    <a t-if="course.get('url')" class="o_llmd_course_change me-3" t-att-href="course['url']"><i class="fa fa-graduation-cap" aria-hidden="true"/> View the course</a>
+                                    <a class="o_llmd_course_change" t-attf-href="/jobs/course-match/#{course['code']}/pick"><i class="fa fa-exchange" aria-hidden="true"/> Choose another course</a>
                                 </div>
                             </div>
                         </div>
                         <!-- keyword + location: keeps the other filters -->
-                        <form t-att-action="base" method="get" class="o_llmd_bigsearch o_llmd_bigsearch_sm" role="search" aria-label="Search these jobs">
+                        <form t-att-action="form_action or base" method="get" class="o_llmd_bigsearch o_llmd_bigsearch_sm" role="search" aria-label="Search these jobs">
                             <label class="o_llmd_bs_field o_llmd_bs_q">
                                 <i class="fa fa-search" aria-hidden="true"/>
                                 <input type="search" name="q" class="form-control" t-att-value="state['q']" t-attf-placeholder="#{'Search in ' + scope['label'] if scope.get('label') else 'Job title, skill, keyword or company'}" maxlength="80" aria-label="Keyword"/>
@@ -296,8 +331,8 @@
                             <button type="submit" class="btn o_llmd_btn_primary o_llmd_bs_go">Search Jobs</button>
                         </form>
                         <div t-if="other_categories" class="o_llmd_cat_switch">
-                            <span class="o_llmd_cat_switch_label"><t t-if="kind == 'category'">Other categories</t><t t-else="">Categories</t></span>
-                            <a t-foreach="other_categories" t-as="oc" t-att-href="oc[3]" t-attf-class="o_llmd_cat_pill #{'active' if oc[4] else ''}" t-att-aria-pressed="('true' if oc[4] else 'false') if kind not in ('all', 'category') else None"><t t-out="oc[1]"/> <span class="o_llmd_n" t-out="oc[2]"/></a>
+                            <span class="o_llmd_cat_switch_label"><t t-if="kind == 'category'">Other categories</t><t t-elif="kind in ('region', 'location', 'company')">Industries</t><t t-else="">Categories</t></span>
+                            <a t-foreach="other_categories" t-as="oc" t-att-href="oc[3]" t-attf-class="o_llmd_cat_pill #{'active' if oc[4] else ''}" t-att-aria-pressed="('true' if oc[4] else 'false') if kind not in ('all', 'category') or own_page else None"><t t-out="oc[1]"/> <span class="o_llmd_n" t-out="oc[2]"/></a>
                         </div>
                     </div>
                 </section>
@@ -327,7 +362,7 @@
         </t>
     </template>
 
-    <!-- the jobs with their filters on the left (a drawer on small screens): every results page (and the full search at /jobs?view=all) -->
+    <!-- the jobs with their filters on the left (a drawer on small screens): every results page (and the full search at /jobs/all) -->
     <template id="results_main" name="LLMD: job listing with filters">
         <t t-set="kind" t-value="scope['kind']"/>
         <t t-set="mode_icons" t-value="{'remote': 'fa-wifi', 'hybrid': 'fa-building-o', 'onsite': 'fa-map-marker'}"/>
@@ -335,7 +370,7 @@
             <div class="container">
                 <div class="o_llmd_layout">
                     <aside class="o_llmd_side" id="o_llmd_filters" aria-label="Filters">
-                        <form t-att-action="base" method="get" id="o_llmd_board_form" class="o_llmd_search o_llmd_filters" t-att-data-scope="kind" t-att-data-scope-value="scope_value">
+                        <form t-att-action="form_action or base" method="get" id="o_llmd_board_form" class="o_llmd_search o_llmd_filters" t-att-data-scope="kind" t-att-data-scope-value="scope_value">
                             <div class="o_llmd_side_head">
                                 <h2 class="o_llmd_side_title"><i class="fa fa-sliders" aria-hidden="true"/> Filters</h2>
                                 <a t-if="any_active" t-att-href="clear_href" class="o_llmd_side_clear">Clear all</a>
@@ -345,7 +380,7 @@
                                 <details t-if="(regions or cities) and (kind != 'location' or scope.get('place') in ('country', 'region'))" class="o_llmd_fsec" open="open">
                                     <summary>Location <span t-if="state['region'] or state['country'] or state['city']" class="o_llmd_badge" t-out="len(state['city']) + (1 if state['country'] else 0) + (1 if state['region'] else 0)"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
                                     <div t-if="kind not in ('location', 'region') and regions" class="o_llmd_fgroup">
-                                        <label class="o_llmd_flabel" for="llmd_region">Region</label>
+                                        <label class="o_llmd_flabel" for="llmd_region">Region <a t-if="state['region']" class="o_llmd_side_clear o_llmd_all_regions" t-att-href="href(region='')">All regions</a></label>
                                         <t t-set="world_opts" t-value="[r for r in regions if not r[3]]"/>
                                         <t t-set="zone_opts" t-value="[r for r in regions if r[3]]"/>
                                         <select id="llmd_region" name="region" class="form-select">
@@ -412,6 +447,23 @@
                                 </fieldset>
 
                                 <fieldset class="o_llmd_fgroup">
+                                    <legend class="o_llmd_flabel">Experience level</legend>
+                                    <label t-foreach="levels" t-as="op" t-attf-class="o_llmd_check #{'is-empty' if not op[2] and not op[3] else ''}">
+                                        <input type="checkbox" class="form-check-input" name="level" t-att-value="op[0]" t-att-checked="'checked' if op[3] else None" t-att-disabled="'disabled' if not op[2] and not op[3] else None"/>
+                                        <span class="o_llmd_check_txt" t-out="op[1]"/><span class="o_llmd_n" t-out="op[2]"/>
+                                    </label>
+                                </fieldset>
+
+                                <fieldset t-if="salary_bands" class="o_llmd_fgroup">
+                                    <legend class="o_llmd_flabel">Salary</legend>
+                                    <label t-foreach="salary_bands" t-as="op" class="o_llmd_check">
+                                        <input type="checkbox" class="form-check-input" name="salary" t-att-value="op[0]" t-att-checked="'checked' if op[3] else None"/>
+                                        <span class="o_llmd_check_txt" t-out="op[1]"/><span class="o_llmd_n" t-out="op[2]"/>
+                                    </label>
+                                    <p class="o_llmd_fnote">The lowest salary the job states, in its own currency (nothing is converted). Jobs that state no salary are not counted.</p>
+                                </fieldset>
+
+                                <fieldset class="o_llmd_fgroup">
                                     <legend class="o_llmd_flabel">Time Posted</legend>
                                     <label class="o_llmd_check">
                                         <input type="radio" class="form-check-input" name="posted" value="" t-att-checked="'checked' if not state['posted'] else None"/>
@@ -424,7 +476,7 @@
                                 </fieldset>
 
                                 <details t-if="kind != 'category' and categories" class="o_llmd_fsec" t-att-open="'open' if state['category'] else None">
-                                    <summary>Category <span t-if="state['category']" class="o_llmd_badge" t-out="len(state['category'])"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
+                                    <summary><t t-if="kind in ('region', 'location', 'company')">Industry</t><t t-else="">Category</t> <span t-if="state['category']" class="o_llmd_badge" t-out="len(state['category'])"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
                                     <div class="o_llmd_checklist">
                                         <label t-foreach="categories" t-as="op" class="o_llmd_check">
                                             <input type="checkbox" class="form-check-input" name="category" t-att-value="op[0]" t-att-checked="'checked' if op[0] in state['category'] else None"/>
@@ -433,15 +485,15 @@
                                     </div>
                                 </details>
 
-                                <details t-if="functions" class="o_llmd_fsec" t-att-open="'open' if state['function'] else None">
-                                    <summary>Job Function <span t-if="state['function']" class="o_llmd_badge" t-out="len(state['function'])"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
+                                <details t-if="functions and kind != 'department'" class="o_llmd_fsec" t-att-open="'open' if state['function'] else None">
+                                    <summary>Department <span t-if="state['function']" class="o_llmd_badge" t-out="len(state['function'])"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
                                     <div class="o_llmd_checklist">
                                         <label t-foreach="functions" t-as="op" class="o_llmd_check">
                                             <input type="checkbox" class="form-check-input" name="function" t-att-value="op[0]" t-att-checked="'checked' if op[0] in state['function'] else None"/>
                                             <span class="o_llmd_check_txt" t-out="op[1]"/><span class="o_llmd_n" t-out="op[2]"/>
                                         </label>
                                     </div>
-                                    <p class="o_llmd_fnote">The department the company files the job under.</p>
+                                    <p class="o_llmd_fnote">The team the company files the job under, as one list for every company.</p>
                                 </details>
 
                                 <details t-if="kind != 'role' and roles" class="o_llmd_fsec" t-att-open="'open' if state['role'] else None">
@@ -477,15 +529,22 @@
                                     </div>
                                 </details>
 
-                                <div class="o_llmd_fsec o_llmd_fsec_off">
-                                    <p class="o_llmd_fsec_off_title">Industry · Company size</p>
-                                    <p class="o_llmd_fnote">Not available: the working job sources do not give a company's industry or size, so these filters are switched off rather than guessed.</p>
-                                </div>
+                                <details t-if="kind != 'company'" class="o_llmd_fsec" t-att-open="'open' if state['size'] else None">
+                                    <summary>Company size <span t-if="state['size']" class="o_llmd_badge" t-out="len(state['size'])"/><i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary>
+                                    <div class="o_llmd_checklist">
+                                        <label t-foreach="sizes" t-as="op" t-attf-class="o_llmd_check #{'is-empty' if not op[2] and not op[3] else ''}">
+                                            <input type="checkbox" class="form-check-input" name="size" t-att-value="op[0]" t-att-checked="'checked' if op[3] else None" t-att-disabled="'disabled' if not op[2] and not op[3] else None"/>
+                                            <span class="o_llmd_check_txt" t-out="op[1]"/><span class="o_llmd_n" t-out="op[2]"/>
+                                        </label>
+                                    </div>
+                                    <p class="o_llmd_fnote">Approximate employee count of the whole company, from public information - the job sources do not give it. A company of unknown size is not counted here.</p>
+                                </details>
+
                                 <input t-if="state['q']" type="hidden" name="q" t-att-value="state['q']"/>
                                 <input t-if="state['location']" type="hidden" name="location" t-att-value="state['location']"/>
                                 <input t-if="state['track']" type="hidden" name="track" t-att-value="state['track']"/>
                                 <input t-if="state['sort']" type="hidden" name="sort" t-att-value="state['sort']"/>
-                                <input t-if="kind == 'all'" type="hidden" name="view" value="all"/>
+                                <input t-if="kind == 'all' and not own_page" type="hidden" name="view" value="all"/>
                             </div>
                             <div class="o_llmd_side_foot">
                                 <button type="submit" class="btn o_llmd_btn_primary o_llmd_apply_filters">Apply Filters · <span class="o_llmd_live_n" t-out="total"/> <span class="o_llmd_live_w"><t t-if="total == 1">job</t><t t-else="">jobs</t></span></button>
@@ -532,13 +591,85 @@
         <div class="o_llmd_backdrop" hidden="hidden"/>
     </template>
 
-    <!-- one company: name, a logo initial (no logo data is available), where it has its headquarters, its number of jobs -> /jobs/company/<slug> -->
+    <!-- one company: name, a logo initial (no logo data is available), where it has its headquarters, its number of jobs -> /companies/<slug> -->
     <template id="company_card" name="LLMD: company card">
-        <a t-attf-href="/jobs/company/#{co[1]}" class="o_llmd_cocard">
+        <a t-attf-href="/companies/#{co[1]}" class="o_llmd_cocard">
             <span class="o_llmd_co_logo" aria-hidden="true" t-out="(co[0].strip() or '?')[:1].upper()"/>
             <span class="o_llmd_co_text"><strong t-out="co[0]"/><span><t t-out="co[2]"/> open <t t-if="co[2] == 1">job</t><t t-else="">jobs</t><t t-if="len(co) &gt; 3 and co[3]"> · HQ <t t-out="co[3]"/></t></span></span>
             <i class="fa fa-arrow-right o_llmd_go" aria-hidden="true"/>
         </a>
+    </template>
+
+    <!-- ============================== /companies : every company with open jobs (llmd.company: one record per company of the jobs), search, industry, sort, pages.
+         Each card opens /companies/<slug>. No logo or description is stored for a company, so the card shows its initial and what its jobs say. ============================== -->
+    <template id="company_directory" name="LLMD: all companies">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Companies hiring</t>
+            <div id="wrap" class="o_llmd_board o_llmd_directory o_llmd_companies_page">
+                <section class="o_llmd_rband">
+                    <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/></div>
+                    <div class="container o_llmd_rband_in">
+                        <nav class="o_llmd_crumbs" aria-label="Breadcrumb"><a href="/" class="o_llmd_crumb_link">Home</a><span class="o_llmd_crumb_sep" aria-hidden="true">/</span><a href="/jobs" class="o_llmd_crumb_link">Jobs Explorer</a><span class="o_llmd_crumb_sep" aria-hidden="true">/</span><span class="o_llmd_crumb_here" aria-current="page">Companies</span></nav>
+                        <div class="o_llmd_rhead">
+                            <span class="o_llmd_rhead_icon" aria-hidden="true"><i class="fa fa-building-o"/></span>
+                            <div class="o_llmd_rhead_text">
+                                <h1 class="o_llmd_rtitle">Companies</h1>
+                                <p class="o_llmd_rdesc"><t t-out="all_total"/> companies with open jobs right now. Open a company to see all of its jobs.</p>
+                            </div>
+                        </div>
+                        <form action="/companies" method="get" class="o_llmd_co_tools" role="search">
+                            <label class="o_llmd_bs_field o_llmd_dir_search">
+                                <i class="fa fa-search" aria-hidden="true"/>
+                                <input type="search" name="q" class="form-control" t-att-value="q" placeholder="Search companies" aria-label="Search companies" maxlength="80"/>
+                            </label>
+                            <select name="industry" class="form-select o_llmd_co_select" aria-label="Industry">
+                                <option value="">All industries</option>
+                                <option t-foreach="industry_options" t-as="op" t-att-value="op[0]" t-att-selected="'selected' if op[0] == industry else None"><t t-out="op[1]"/> (<t t-out="op[2]"/>)</option>
+                            </select>
+                            <select name="sort" class="form-select o_llmd_co_select" aria-label="Sort">
+                                <option value="jobs" t-att-selected="'selected' if sort == 'jobs' else None">Most jobs</option>
+                                <option value="name" t-att-selected="'selected' if sort == 'name' else None">Name A–Z</option>
+                            </select>
+                            <button type="submit" class="btn o_llmd_btn_primary">Search</button>
+                        </form>
+                    </div>
+                </section>
+                <section class="o_llmd_lsec">
+                    <div class="container">
+                        <p class="o_llmd_count" role="status">
+                            <t t-if="total">Showing <strong><t t-out="first"/>–<t t-out="last"/></strong> of <strong t-out="total"/> <t t-if="total == 1">company</t><t t-else="">companies</t></t>
+                            <t t-else="">No company matches<t t-if="q"> "<t t-out="q"/>"</t>.</t>
+                            <a t-if="q or industry or sort != 'jobs'" href="/companies" class="ms-2">Clear</a>
+                        </p>
+                        <div t-if="cards" class="o_llmd_codir">
+                            <a t-foreach="cards" t-as="co" t-att-href="co['href']" class="o_llmd_codir_card">
+                                <span class="o_llmd_co_logo" aria-hidden="true" t-out="(co['name'].strip() or '?')[:1].upper()"/>
+                                <span class="o_llmd_codir_text">
+                                    <strong class="o_llmd_codir_name" t-out="co['name']"/>
+                                    <span t-if="co['industries']" class="o_llmd_codir_meta"><i class="fa fa-briefcase" aria-hidden="true"/> Hiring in <t t-out="', '.join(co['industries'])"/></span>
+                                    <span t-if="co['hq']" class="o_llmd_codir_meta"><i class="fa fa-map-marker" aria-hidden="true"/> HQ <t t-out="co['hq']"/></span>
+                                    <span class="o_llmd_codir_n"><t t-out="co['jobs']"/> open <t t-if="co['jobs'] == 1">job</t><t t-else="">jobs</t> <i class="fa fa-arrow-right" aria-hidden="true"/></span>
+                                </span>
+                            </a>
+                        </div>
+                        <div t-else="" class="o_llmd_empty">
+                            <p class="mb-2">Try another name or "All industries".</p>
+                            <a href="/companies" class="btn o_llmd_btn_ghost">Show all companies</a>
+                        </div>
+                        <nav t-if="pages &gt; 1" class="o_llmd_pager" aria-label="Company pages">
+                            <ul class="pagination m-0">
+                                <li t-attf-class="page-item #{'disabled' if not prev_href else ''}"><a class="page-link" t-att-href="prev_href or None" aria-label="Previous page"><span aria-hidden="true">←</span></a></li>
+                                <t t-foreach="nav" t-as="n">
+                                    <li t-if="n[0]" t-attf-class="page-item #{'active' if n[0] == page else ''}"><a class="page-link" t-att-href="n[1]" t-att-aria-current="'page' if n[0] == page else None" t-out="n[0]"/></li>
+                                    <li t-else="" class="page-item disabled o_llmd_pager_gap"><span class="page-link" aria-hidden="true">…</span></li>
+                                </t>
+                                <li t-attf-class="page-item #{'disabled' if not next_href else ''}"><a class="page-link" t-att-href="next_href or None" aria-label="Next page"><span aria-hidden="true">→</span></a></li>
+                            </ul>
+                        </nav>
+                    </div>
+                </section>
+            </div>
+        </t>
     </template>
 
     <!-- ============================== /jobs/categories : every category that has jobs now, searchable ============================== -->
@@ -546,9 +677,6 @@
         <t t-call="website.layout">
             <t t-set="additional_title">All job categories</t>
             <div id="wrap" class="o_llmd_board o_llmd_directory">
-                <link rel="preconnect" href="https://fonts.googleapis.com"/>
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
                 <section class="o_llmd_rband">
                     <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/></div>
                     <div class="container o_llmd_rband_in">
@@ -569,28 +697,25 @@
                 <section class="o_llmd_lsec">
                     <div class="container">
                         <div class="o_llmd_catgrid">
-                            <a t-foreach="cats" t-as="ct" t-attf-href="/jobs/category/#{ct[0]}" t-attf-class="o_llmd_catcard o_llmd_cat_#{ct[0]}" t-att-data-name="(ct[1] + ' ' + ct[2]).lower()">
+                            <a t-foreach="cats" t-as="ct" t-attf-href="/categories/#{ct[0]}" t-attf-class="o_llmd_catcard o_llmd_cat_#{ct[0]}" t-att-data-name="(ct[1] + ' ' + ct[2]).lower()">
                                 <span class="o_llmd_catcard_icon" aria-hidden="true"><i t-attf-class="fa #{ct[3]}"/></span>
                                 <h3 class="o_llmd_catcard_title" t-out="ct[1]"/>
                                 <p class="o_llmd_catcard_text" t-out="ct[2]"/>
                                 <span class="o_llmd_catcard_n"><t t-out="ct[4]"/> open <t t-if="ct[4] == 1">job</t><t t-else="">jobs</t> · <t t-out="ct[5]"/> <t t-if="ct[5] == 1">company</t><t t-else="">companies</t> <i class="fa fa-arrow-right" aria-hidden="true"/></span>
                             </a>
                         </div>
-                        <p class="o_llmd_nomatch o_llmd_dir_none" hidden="hidden">No category matches. <a href="/jobs?view=all">Browse all jobs</a></p>
+                        <p class="o_llmd_nomatch o_llmd_dir_none" hidden="hidden">No category matches. <a href="/jobs/all">Browse all jobs</a></p>
                     </div>
                 </section>
             </div>
         </t>
     </template>
 
-    <!-- ============================== /jobs/regions : every region of the world that has jobs (where the JOBS are), its countries, regions of India and companies ============================== -->
+    <!-- ============================== /regions : every region of the world that has jobs (where the JOBS are), its countries, regions of India and companies ============================== -->
     <template id="region_directory" name="LLMD: all regions">
         <t t-call="website.layout">
             <t t-set="additional_title">Jobs by region</t>
             <div id="wrap" class="o_llmd_board o_llmd_directory">
-                <link rel="preconnect" href="https://fonts.googleapis.com"/>
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
                 <section class="o_llmd_rband">
                     <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/></div>
                     <div class="container o_llmd_rband_in">
@@ -608,7 +733,7 @@
                     <div class="container">
                         <div class="o_llmd_regiondir">
                             <article t-foreach="regions" t-as="rg" t-attf-class="o_llmd_regionrow o_llmd_region_#{rg['slug']}">
-                                <a t-attf-href="/jobs/region/#{rg['slug']}" class="o_llmd_regionrow_head">
+                                <a t-attf-href="/regions/#{rg['slug']}" class="o_llmd_regionrow_head">
                                     <span class="o_llmd_region_icon" aria-hidden="true"><i t-attf-class="fa #{rg['icon']}"/></span>
                                     <span class="o_llmd_regionrow_text"><h2 class="o_llmd_region_name" t-out="rg['name']"/><p class="o_llmd_region_text" t-out="rg['text']"/></span>
                                     <span class="o_llmd_regionrow_n"><strong t-out="rg['count']"/> open <t t-if="rg['count'] == 1">job</t><t t-else="">jobs</t><small><t t-out="len(rg['companies'])"/> <t t-if="len(rg['companies']) == 1">company</t><t t-else="">companies</t></small></span>
@@ -617,15 +742,15 @@
                                 <div class="o_llmd_regionrow_body">
                                     <div t-if="rg['countries']" class="o_llmd_regionrow_part">
                                         <p class="o_llmd_regionrow_label">Countries</p>
-                                        <div class="o_llmd_pills"><a t-foreach="rg['countries']" t-as="cn" t-attf-href="/jobs/location/#{cn[1]}" class="o_llmd_cat_pill"><t t-out="cn[0]"/> <span class="o_llmd_n" t-out="cn[2]"/></a></div>
+                                        <div class="o_llmd_pills"><a t-foreach="rg['countries']" t-as="cn" t-attf-href="/locations/#{cn[1]}" class="o_llmd_cat_pill"><t t-out="cn[0]"/> <span class="o_llmd_n" t-out="cn[2]"/></a></div>
                                     </div>
                                     <div t-if="rg['zones']" class="o_llmd_regionrow_part">
                                         <p class="o_llmd_regionrow_label">Regions of India</p>
-                                        <div class="o_llmd_pills"><a t-foreach="rg['zones']" t-as="z" t-attf-href="/jobs/region/#{z[0]}" class="o_llmd_cat_pill"><t t-out="z[1]"/> <span class="o_llmd_n" t-out="z[2]"/></a></div>
+                                        <div class="o_llmd_pills"><a t-foreach="rg['zones']" t-as="z" t-attf-href="/regions/#{z[0]}" class="o_llmd_cat_pill"><t t-out="z[1]"/> <span class="o_llmd_n" t-out="z[2]"/></a></div>
                                     </div>
                                     <div t-if="rg['companies']" class="o_llmd_regionrow_part">
                                         <p class="o_llmd_regionrow_label">Companies hiring here</p>
-                                        <div class="o_llmd_pills"><a t-foreach="rg['companies'][:12]" t-as="co" t-attf-href="/jobs/company/#{co[1]}?region=#{rg['slug']}" class="o_llmd_cat_pill"><t t-out="co[0]"/> <span class="o_llmd_n" t-out="co[2]"/></a>
+                                        <div class="o_llmd_pills"><a t-foreach="rg['companies'][:12]" t-as="co" t-attf-href="/companies/#{co[1]}/region-#{rg['slug']}" class="o_llmd_cat_pill"><t t-out="co[0]"/> <span class="o_llmd_n" t-out="co[2]"/></a>
                                             <span t-if="len(rg['companies']) &gt; 12" class="o_llmd_more_n">+<t t-out="len(rg['companies']) - 12"/> more</span></div>
                                     </div>
                                 </div>
@@ -646,44 +771,75 @@
         <t t-set="sk" t-value="job.card_skills(3)"/>
         <t t-set="years" t-value="job.years_label()"/>
         <t t-set="place" t-value="', '.join(x for x in (job.city, job.country) if x) or job.location"/>
+        <t t-set="lk" t-value="job.filter_links()"/>
         <div t-attf-class="o_llmd_lcell o_llmd_cat_#{job.job_category or 'none'}">
             <article class="o_llmd_lcard">
                 <div class="o_llmd_lcard_top">
                     <span class="o_llmd_logo o_llmd_logo_sm" aria-hidden="true" t-out="((job.company or job.title or '?').strip() or '?')[:1].upper()"/>
                     <div class="o_llmd_lcard_head">
-                        <h3 class="o_llmd_lcard_title"><a t-attf-href="/jobs/ext/#{job.id}" t-out="job.title" t-att-lang="job.title_lang()"/></h3>
-                        <p class="o_llmd_lcard_co" t-out="job.company"/>
+                        <h3 class="o_llmd_lcard_title"><a t-att-href="job.website_path()" t-out="job.title" t-att-lang="job.title_lang()"/></h3>
+                        <p class="o_llmd_lcard_co"><a t-if="lk['company']" class="o_llmd_co_link" t-att-href="lk['company']" t-out="job.company"/><t t-else="" t-out="job.company"/></p>
                     </div>
                     <span t-if="job.is_new()" class="o_llmd_newbadge">New</span>
                 </div>
-                <p t-if="place" class="o_llmd_lcard_loc" t-att-title="(job.location or '') + (' - ' + job.region_label if job.region_label else '')"><i class="fa fa-map-marker" aria-hidden="true"/><t t-out="place"/><t t-if="job.region_label"> · <span class="o_llmd_lcard_region" t-out="job.region_label"/></t></p>
+                <p t-if="place" class="o_llmd_lcard_loc" t-att-title="(job.location or '') + (' - ' + job.region_label if job.region_label else '')"><i class="fa fa-map-marker" aria-hidden="true"/><a t-if="lk['location']" class="o_llmd_loc_link" t-att-href="lk['location']" t-att-data-filter="lk['q'].get('location')" t-out="place"/><t t-else="" t-out="place"/><t t-if="job.region_label"> · <a t-if="lk['region']" class="o_llmd_lcard_region o_llmd_loc_link" t-att-href="lk['region']" t-out="job.region_label"/><span t-else="" class="o_llmd_lcard_region" t-out="job.region_label"/></t></p>
                 <div class="o_llmd_lcard_tags">
-                    <span t-if="job.work_mode" class="o_llmd_tag" data-kind="mode" t-out="dict(job.facet_tags()).get('mode')"/>
-                    <span t-if="job.job_type" class="o_llmd_tag" data-kind="type" t-out="dict(job.facet_tags()).get('type')"/>
+                    <a t-if="job.work_mode and lk['mode']" class="o_llmd_tag o_llmd_tag_link" data-kind="mode" t-att-href="lk['mode']" t-att-data-filter="lk['q'].get('mode')" t-out="dict(job.facet_tags()).get('mode')"/>
+                    <a t-if="job.job_type and lk['jtype']" class="o_llmd_tag o_llmd_tag_link" data-kind="type" t-att-href="lk['jtype']" t-att-data-filter="lk['q'].get('jtype')" t-out="dict(job.facet_tags()).get('type')"/>
                     <span t-if="job.source_lang" class="o_llmd_tag o_llmd_tag_lang" data-kind="lang" t-out="job.source_lang_label()"/>
-                    <span t-if="years" class="o_llmd_tag" data-kind="exp" t-out="years"/>
-                    <span t-elif="dict(job.facet_tags()).get('exp') and dict(job.facet_tags()).get('exp') != dict(job.facet_tags()).get('type')" class="o_llmd_tag" data-kind="exp" t-out="dict(job.facet_tags())['exp']"/>
+                    <a t-if="years and lk['years']" class="o_llmd_tag o_llmd_tag_link" data-kind="exp" t-att-href="lk['years']" t-att-data-filter="lk['q'].get('years')" t-out="years"/>
+                    <a t-elif="lk['level'] and dict(job.facet_tags()).get('exp') and dict(job.facet_tags()).get('exp') != dict(job.facet_tags()).get('type')" class="o_llmd_tag o_llmd_tag_link" data-kind="exp" t-att-href="lk['level']" t-att-data-filter="lk['q'].get('level')" t-out="dict(job.facet_tags())['exp']"/>
                 </div>
                 <div t-if="sk[0]" class="o_llmd_lcard_skills"><span t-foreach="sk[0]" t-as="sn" class="o_llmd_skill_chip" t-out="sn"/></div>
                 <div class="o_llmd_lcard_foot">
-                    <span t-if="job.posted" class="o_llmd_posted"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></span>
+                    <a t-if="job.posted and lk['posted']" class="o_llmd_posted o_llmd_tag_link" t-att-href="lk['posted']" t-att-data-filter="lk['q'].get('posted')"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></a>
+                    <span t-elif="job.posted" class="o_llmd_posted"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></span>
                     <span t-else="" class="o_llmd_posted">No posting date</span>
-                    <a class="o_llmd_lcard_go" t-attf-href="/jobs/ext/#{job.id}">View Details <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                    <a class="o_llmd_lcard_go" t-att-href="job.website_path()">View Details <i class="fa fa-arrow-right" aria-hidden="true"/></a>
                 </div>
             </article>
         </div>
     </template>
 
-    <!-- /jobs/latest : one batch of latest jobs, swapped or appended in place by the script -->
+    <!-- /jobs/latest : one page of latest jobs and its page numbers, swapped in place by the script -->
     <template id="latest_batch" name="LLMD: latest jobs batch">
         <div class="o_llmd_latest_batch" t-att-data-more="'1' if more else '0'" t-att-data-total="str(latest_total)" t-att-data-page="str(page)">
             <t t-foreach="latest" t-as="job"><t t-call="llmd_job_aggregator.latest_card"/></t>
         </div>
+        <span class="o_llmd_latest_batch_range"><t t-call="llmd_job_aggregator.latest_range"/></span>
+        <div class="o_llmd_latest_batch_nav"><t t-call="llmd_job_aggregator.latest_pager"/></div>
     </template>
 
-    <!-- one country: its flag (an emoji, drawn by the colour-emoji font), its name, its number of jobs -> /jobs/location/<country> -->
+    <!-- "13–24": the jobs of this page of Latest Jobs -->
+    <template id="latest_range" name="LLMD: latest jobs range"><t t-if="latest"><t t-out="(page - 1) * 12 + 1"/>–<t t-out="(page - 1) * 12 + len(latest)"/></t><t t-else="">0</t></template>
+
+    <!-- Latest Jobs page numbers: ← 1 2 3 4 5 … 525 → (the same pagination look as the results pages; plain links that work without the script) -->
+    <template id="latest_pager" name="LLMD: latest jobs pages">
+        <nav t-if="pages &gt; 1" class="o_llmd_pager o_llmd_latest_pager" aria-label="Latest jobs pages" t-att-data-cat="latest_cat or ''">
+            <t t-foreach="[(nav, 'o_llmd_pg_wide'), (nav_s, 'o_llmd_pg_narrow')]" t-as="pg">      <!-- the same pages: 5 numbers in a row, 3 on a phone -->
+            <ul t-attf-class="pagination m-0 #{pg[1]}">
+                <li t-attf-class="page-item #{'disabled' if page &lt;= 1 else ''}">
+                    <a class="page-link" t-att-href="latest_path(latest_cat, page - 1) if page &gt; 1 else None" t-att-data-page="str(page - 1) if page &gt; 1 else None"
+                       aria-label="Previous page" title="Previous page"><span aria-hidden="true">←</span></a>
+                </li>
+                <t t-foreach="pg[0]" t-as="n">
+                    <li t-if="n" t-attf-class="page-item #{'active' if n == page else ''}">
+                        <a class="page-link" t-att-href="latest_path(latest_cat, n)" t-att-data-page="str(n)" t-att-aria-current="'page' if n == page else None" t-out="n"/>
+                    </li>
+                    <li t-else="" class="page-item disabled o_llmd_pager_gap"><span class="page-link" aria-hidden="true">…</span></li>
+                </t>
+                <li t-attf-class="page-item #{'disabled' if page &gt;= pages else ''}">
+                    <a class="page-link" t-att-href="latest_path(latest_cat, page + 1) if page &lt; pages else None" t-att-data-page="str(page + 1) if page &lt; pages else None"
+                       aria-label="Next page" title="Next page"><span aria-hidden="true">→</span></a>
+                </li>
+            </ul>
+            </t>
+        </nav>
+    </template>
+
+    <!-- one country: its flag (an emoji, drawn by the colour-emoji font), its name, its number of jobs -> /jobs/<country> -->
     <template id="country_card" name="LLMD: country card">
-        <a t-attf-href="/jobs/location/#{cn[1]}#{'?mode=' + mode if mode else ''}" class="o_llmd_countrycard" t-att-data-name="cn[0].lower()">
+        <a t-attf-href="/locations/#{cn[1]}#{'/' + mode if mode else ''}" class="o_llmd_countrycard" t-att-data-name="cn[0].lower()">
             <span t-if="cn[3]" class="o_llmd_flag" aria-hidden="true" t-out="cn[3]"/>
             <span t-else="" class="o_llmd_flag o_llmd_flag_none" aria-hidden="true"><i class="fa fa-flag-o"/></span>
             <span class="o_llmd_country_text"><strong t-out="cn[0]"/><span><t t-out="cn[2]"/> <t t-if="cn[2] == 1">job</t><t t-else="">jobs</t></span></span>
@@ -691,14 +847,11 @@
         </a>
     </template>
 
-    <!-- ============================== /jobs/countries : every country with jobs, by region; ?mode=remote counts the remote jobs only ============================== -->
+    <!-- ============================== /locations : every country with jobs, by region; /locations/remote counts the remote jobs only ============================== -->
     <template id="country_directory" name="LLMD: all countries">
         <t t-call="website.layout">
             <t t-set="additional_title">All countries</t>
             <div id="wrap" class="o_llmd_board o_llmd_directory">
-                <link rel="preconnect" href="https://fonts.googleapis.com"/>
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap"/>
                 <link t-if="flag_font" rel="stylesheet" t-att-href="flag_font"/>
                 <section class="o_llmd_rband">
                     <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/></div>
@@ -717,8 +870,8 @@
                                 <input type="search" class="form-control o_llmd_dir_filter" placeholder="Find a country" aria-label="Find a country" data-target=".o_llmd_countrycard"/>
                             </label>
                             <div class="btn-group o_llmd_modes o_llmd_dir_modes" role="group" aria-label="Which jobs are counted">
-                                <a href="/jobs/countries" t-attf-class="btn btn-outline-primary #{'active' if not mode else ''}">All jobs</a>
-                                <a href="/jobs/countries?mode=remote" t-attf-class="btn btn-outline-primary #{'active' if mode == 'remote' else ''}">Remote only</a>
+                                <a href="/locations" t-attf-class="btn btn-outline-primary #{'active' if not mode else ''}">All jobs</a>
+                                <a href="/locations/remote" t-attf-class="btn btn-outline-primary #{'active' if mode == 'remote' else ''}">Remote only</a>
                             </div>
                         </div>
                     </div>
@@ -757,18 +910,20 @@
                     </span>
                     <button type="button" class="o_llmd_bookmark" t-att-data-job="job.id" aria-pressed="false" aria-label="Save this job"><i class="fa fa-bookmark-o" aria-hidden="true"/></button>
                 </div>
-                <h3 class="o_llmd_job_title"><a t-attf-href="/jobs/ext/#{job.id}" t-out="job.title" t-att-lang="job.title_lang()"/></h3>
-                <p class="o_llmd_job_co" t-if="job.company"><i class="fa fa-building-o" aria-hidden="true"/><a t-att-href="job.company_link()" class="o_llmd_co_link" t-out="job.company"/></p>
-                <p class="o_llmd_job_loc" t-if="job.location" t-att-title="job.location"><i class="fa fa-map-marker" aria-hidden="true"/><t t-out="job.location"/><span t-if="job.region_label" class="o_llmd_region_tag" t-out="job.region_label"/></p>
+                <h3 class="o_llmd_job_title"><a t-att-href="job.website_path()" t-out="job.title" t-att-lang="job.title_lang()"/></h3>
+                <p class="o_llmd_job_co" t-if="job.company"><i class="fa fa-building-o" aria-hidden="true"/><a t-if="job.company_link()" t-att-href="job.company_link()" class="o_llmd_co_link" t-out="job.company"/><span t-else="" t-out="job.company"/></p>
+                <t t-set="lk" t-value="job.filter_links()"/>
+                <p class="o_llmd_job_loc" t-if="job.location" t-att-title="job.location"><i class="fa fa-map-marker" aria-hidden="true"/><a t-if="lk['location']" class="o_llmd_loc_link" t-att-href="lk['location']" t-att-data-filter="lk['q'].get('location')" t-out="job.location"/><t t-else="" t-out="job.location"/><a t-if="job.region_label and lk['region']" class="o_llmd_region_tag o_llmd_tag_link" t-att-href="lk['region']" t-att-data-filter="lk['q'].get('region')" t-out="job.region_label"/><span t-elif="job.region_label" class="o_llmd_region_tag" t-out="job.region_label"/></p>
                 <p t-if="job.source_lang or job.languages" class="o_llmd_lang_row">
                     <span t-if="job.source_lang" class="o_llmd_lang o_llmd_lang_src" title="As the employer wrote it - no machine translation."><i class="fa fa-language" aria-hidden="true"/><t t-out="job.source_lang_label()"/></span>
                     <span t-foreach="[lg for lg in job.language_tags() if lg[0] != 'English'][:2]" t-as="lg" t-attf-class="o_llmd_lang o_llmd_lang_#{lg[1]}"><i class="fa fa-comments-o" aria-hidden="true"/><t t-out="lg[0]"/><t t-if="lg[1] == 'plus'"> (a plus)</t></span>
                 </p>
                 <p class="o_llmd_job_desc" t-if="desc and not compact" t-out="desc"/>
                 <div class="o_llmd_tags">
-                    <span t-foreach="[t for t in job.facet_tags() if t[0] != 'exp']" t-as="tag" class="o_llmd_tag" t-att-data-kind="tag[0]" t-out="tag[1]"/>
-                    <span t-if="years" class="o_llmd_tag" data-kind="exp"><t t-out="years"/></span>
-                    <t t-elif="dict(job.facet_tags()).get('exp')"><span class="o_llmd_tag" data-kind="exp" t-out="dict(job.facet_tags())['exp']"/></t>
+                    <t t-foreach="[t for t in job.facet_tags() if t[0] != 'exp']" t-as="tag"><a t-if="job.tag_href(tag[0], lk)" class="o_llmd_tag o_llmd_tag_link" t-att-data-kind="tag[0]" t-att-href="job.tag_href(tag[0], lk)" t-att-data-filter="lk['q'].get(tag[0])" t-out="tag[1]"/><span t-else="" class="o_llmd_tag" t-att-data-kind="tag[0]" t-out="tag[1]"/></t>
+                    <a t-if="years and lk['years']" class="o_llmd_tag o_llmd_tag_link" data-kind="exp" t-att-href="lk['years']" t-att-data-filter="lk['q'].get('years')"><t t-out="years"/></a>
+                    <span t-elif="years" class="o_llmd_tag" data-kind="exp"><t t-out="years"/></span>
+                    <t t-elif="dict(job.facet_tags()).get('exp')"><a t-if="lk['level']" class="o_llmd_tag o_llmd_tag_link" data-kind="exp" t-att-href="lk['level']" t-att-data-filter="lk['q'].get('level')" t-out="dict(job.facet_tags())['exp']"/><span t-else="" class="o_llmd_tag" data-kind="exp" t-out="dict(job.facet_tags())['exp']"/></t>
                 </div>
                 <div t-if="sk[0]" class="o_llmd_skills_row">
                     <span t-foreach="sk[0]" t-as="s" class="o_llmd_skill_chip" t-out="s"/>
@@ -776,9 +931,10 @@
                 </div>
                 <p t-if="matched" class="o_llmd_match"><i class="fa fa-graduation-cap" aria-hidden="true"/> Matches your course: <t t-out="', '.join(matched[:4])"/></p>
                 <div class="o_llmd_job_foot">
-                    <span class="o_llmd_posted"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></span>
+                    <a t-if="lk['posted']" class="o_llmd_posted o_llmd_tag_link" t-att-href="lk['posted']" t-att-data-filter="lk['q'].get('posted')"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></a>
+                    <span t-else="" class="o_llmd_posted"><i class="fa fa-clock-o" aria-hidden="true"/><t t-out="job.posted_text()"/></span>
                     <span class="o_llmd_foot_btns">
-                        <a class="btn o_llmd_btn_ghost o_llmd_see" t-attf-href="/jobs/ext/#{job.id}">View Details</a>
+                        <a class="btn o_llmd_btn_ghost o_llmd_see" t-att-href="job.website_path()">View Details</a>
                         <a t-if="apply[0] and apply[1] and not no_apply" class="btn o_llmd_btn_primary o_llmd_card_apply" t-att-href="apply[0]" target="_blank" rel="noopener noreferrer nofollow">Apply Now <i class="fa fa-external-link" aria-hidden="true"/></a>
                         <a t-elif="apply[0] and not no_apply" class="btn o_llmd_btn_primary o_llmd_card_apply" t-att-href="apply[0]">Apply Now</a>
                     </span>
@@ -787,12 +943,39 @@
         </div>
     </template>
 
-    <!-- ============================== /jobs/ext/<id> : one job (shared layout, see job_view.xml) ============================== -->
+    <!-- ============================== /jobs/<id>/<slug> : one job (shared layout, see job_view.xml) ============================== -->
     <template id="board_detail" name="LLMD: job board detail">
         <t t-call="website.layout">
             <t t-set="additional_title" t-value="job.title"/>
             <div id="wrap" class="o_llmd_job_detail">
                 <t t-call="llmd_job_aggregator.job_view"/>
+            </div>
+        </t>
+    </template>
+
+    <!-- 404: a job ID that does not exist or is no longer open. Expects: old (the listing, archived, or empty), similar, company_href. -->
+    <template id="job_unavailable" name="LLMD: job not available">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Job not available</t>
+            <div id="wrap" class="o_llmd_board o_llmd_job_gone">
+                <div class="container py-5" style="max-width: 760px;">
+                    <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="/jobs">Jobs</a></li><li class="breadcrumb-item active" aria-current="page">Job not available</li></ol></nav>
+                    <h1 class="h2">This job is no longer available</h1>
+                    <p t-if="old" class="lead mb-1"><strong t-out="old.title"/><t t-if="old.company"> at <t t-out="old.company"/></t> has been closed or removed by the employer.</p>
+                    <p t-else="" class="lead mb-1">We could not find a job at this address.</p>
+                    <p class="text-muted">Open roles change every day - search the current ones:</p>
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        <a href="/jobs/all" class="btn btn-primary">Browse all jobs</a>
+                        <a t-if="company_href" t-att-href="company_href" class="btn btn-outline-secondary">More jobs at <t t-out="old.company"/></a>
+                        <a href="/jobs" class="btn btn-outline-secondary">Jobs home</a>
+                    </div>
+                    <t t-if="similar">
+                        <h2 class="h5">Similar open jobs</h2>
+                        <ul class="list-unstyled">
+                            <li t-foreach="similar" t-as="s" class="mb-2"><a t-att-href="s.website_path()" t-out="s.title"/><span t-if="s.company" class="text-muted"> - <t t-out="s.company"/></span></li>
+                        </ul>
+                    </t>
+                </div>
             </div>
         </t>
     </template>

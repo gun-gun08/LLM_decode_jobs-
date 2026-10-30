@@ -88,7 +88,7 @@ def cards(page):
     out = []
     for part in re.split(r'(?=<article class="o_llmd_job o_llmd_card">)', page)[1:]:
         part = part.split('</article>', 1)[0]
-        m = re.search(r'href="/jobs/ext/(\d+)"', part)
+        m = re.search(r'href="/jobs/(\d+)/[a-z0-9-]+"', part)                     # the job's own page: /jobs/<id>/<slug>
         see = re.search(r'<a[^>]*o_llmd_see[^>]*href="([^"]+)"|<a[^>]*href="([^"]+)"[^>]*o_llmd_see', part)
         if not m:
             continue
@@ -192,10 +192,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Visitor:
-    """A website visitor with its own cookies (the session that the CSRF token belongs to). Redirects are NOT followed, so the test sees them."""
+    """A website visitor with its own cookies (the session that the CSRF token belongs to). Redirects are NOT followed, so the test sees them.
+    signed_in=True: the local test account (LLMD_TEST_USER_LOGIN / _PASSWORD of .env, scripts/local_test_user.py) is signed in first - Apply Now asks for a sign-in,
+    and the site-wide switch llmd_agg.apply_login is never touched by a test (switching it off would open the gate for every visitor while the test runs)."""
 
-    def __init__(self):
+    def __init__(self, signed_in=False):
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), _NoRedirect())
+        if signed_in:
+            import json
+            body = json.dumps({'jsonrpc': '2.0', 'method': 'call', 'params': {'db': gw.os.environ['ODOO_DB'], 'login': gw.os.environ['LLMD_TEST_USER_LOGIN'],
+                                                                              'password': gw.os.environ['LLMD_TEST_USER_PASSWORD']}}).encode()
+            status, answer, _l = self.open('/web/session/authenticate', body, 'application/json')
+            if status != 200 or not (json.loads(answer).get('result') or {}).get('uid'):
+                sys.exit('the local test account could not sign in (scripts/local_test_user.py, LLMD_TEST_USER_LOGIN / LLMD_TEST_USER_PASSWORD in .env)')
 
     def open(self, path, body=None, content_type=None):
         req = urllib.request.Request(gw.site_url() + path, data=body, headers={'User-Agent': 'Mozilla/5.0', **({'Content-Type': content_type} if content_type else {})})
@@ -325,6 +334,8 @@ def apply_flow(rows, click0):
         return json.loads(urllib.request.urlopen(req, timeout=60).read().decode())['result']
 
     n_app0, n_hr0 = apps_count(), applicants_count()
+    app_id0 = max([a['id'] for a in gw.search('llmd.job.application', [['active', 'in', [True, False]]], 1)] or [0])
+    tester = gw.search('res.users', [['login', '=', gw.os.environ['LLMD_TEST_USER_LOGIN']]], 1)[0]
     pid = None
     pid_form = None
     n_pos0 = len(gw.search('hr.job', [['llmd_listing_id', '!=', False], ['active', 'in', [True, False]]], 5000))
@@ -353,7 +364,7 @@ def apply_flow(rows, click0):
         email = 'zz.test.applicant+%d@example.com' % stamp
         form = {'name': 'ZZ Test Applicant', 'email': email, 'phone': '+91 98765 43210', 'note': 'Test <b>note</b>\nsecond line', 'consent': '1'}      # a phone sent anyway is ignored
         resume = {'resume': ('ZZ Test Resume.pdf', TEST_PDF)}
-        v = Visitor()
+        v = Visitor(signed_in=True)
         status, fpage, _ = v.open(path)
         check("our application form opens: name, email, resume (optional), message, consent - NO phone field - CSRF, file upload, link to the employer's website, no site name",
               status == 200 and job['title'] in text(fpage) and all(n in fpage for n in ('name="name"', 'name="email"', 'name="resume"', 'name="consent"', 'name="csrf_token"', 'multipart/form-data'))
@@ -385,7 +396,7 @@ def apply_flow(rows, click0):
             created_applicants.append(rec['applicant_id'][0])
 
         # ---- the full application: name, email, phone, message and a resume
-        v2 = Visitor()
+        v2 = Visitor(signed_in=True)
         status, _b, loc = v2.post_form(path, form, resume)
         recs = apps(email=email)
         check('the full application is accepted and the visitor is redirected to the confirmation only after it was saved', status == 303 and len(recs) == 1 and recs[0]['state'] == 'submitted', loc)
@@ -399,7 +410,7 @@ def apply_flow(rows, click0):
         atts = gw.search('ir.attachment', [['res_model', '=', 'hr.applicant'], ['res_id', '=', applicant.get('id', 0)]], 5)
         check('the resume is attached to the applicant, byte for byte', len(atts) == 1 and atts[0]['name'] == 'ZZ Test Resume.pdf' and base64.b64decode(atts[0]['datas']) == TEST_PDF)
         check('the Job Applications record has every field: applicant name, e-mail, (no phone), job title, company, external job ID, source, channel "Our website", status Received, application date, message, link to the applicant',
-              (r1.get('applicant_name'), r1.get('email'), 'phone' in r1, r1.get('job_title'), r1.get('company'), r1.get('ext_id'), r1.get('source'), r1.get('channel'), r1.get('state'), r1.get('message'))
+              (r1.get('applicant_name'), r1.get('email'), r1.get('phone'), r1.get('job_title'), r1.get('company'), r1.get('ext_id'), r1.get('source'), r1.get('channel'), r1.get('state'), r1.get('message'))
               == ('ZZ Test Applicant', email, False, job['title'], job['company'], job['ext_id'], job['source'], 'own', 'submitted', 'Test <b>note</b>\nsecond line') and bool(r1.get('application_date'))
               and r1['applicant_id'][0] == applicant.get('id') and r1['apply_url'] == job['apply_url'])
         note = applicant.get('applicant_notes') or ''
@@ -412,7 +423,7 @@ def apply_flow(rows, click0):
         check('applying again with the same e-mail (even in capitals) creates NO duplicate: no new applicant, no new record', status == 303 and 'again=1' in loc2 and len(apps(email=email)) == 1 and len(gw.search('hr.applicant', [['email_from', '=ilike', email]], 5)) == 1)
         v2.open('/jobs/ext/%d/go' % jid)
         check("clicking the employer link after applying is a click line and does not take the application back (status stays Received)", apps(id=r1.get('id', 0))[0]['state'] == 'submitted' and len(clicks(job_key=key_of(job))) == 1)
-        v3 = Visitor()
+        v3 = Visitor(signed_in=True)
         status, _b, loc3 = v3.post_form('/jobs/ext/%d/apply' % job2['id'], form, {})
         r_other = [x for x in apps(email=email) if x['ext_id'] == job2['ext_id']]
         check('the same person can apply for a DIFFERENT job (own record, own applicant, own position)', status == 303 and len(r_other) == 1 and r_other[0]['applicant_id'] and r_other[0]['id'] != r1.get('id') and len(apps(email=email)) == 2)
@@ -429,7 +440,8 @@ def apply_flow(rows, click0):
         for old in clicks(job_key=key_of(job)):
             rpc('llmd.job.click', 'unlink', [[old['id']]])                # the click made after applying (above) is not part of these counts
         n_app_c, n_hr_c = apps_count(), applicants_count()
-        v = Visitor()
+        submitted_c = len(gw.search('llmd.job.application', [['state', 'in', ['submitted', 'confirmed']], ['channel', '!=', 'apply_now'], ['active', 'in', [True, False]]], 5000))
+        v = Visitor(signed_in=True)
         status, _b, loc = v.open('/jobs/ext/%d/go' % jid)
         cl = clicks(job_key=key_of(job))
         check("Apply Now: 303 redirect to the job's own application URL, the one stored in Odoo", status == 303 and loc == job['apply_url'], loc[:70])
@@ -438,24 +450,29 @@ def apply_flow(rows, click0):
               len(cl) == 1 and (c['job_title'], c['company'], c['source'], c['ext_id'], c['apply_url'], c['status']) == (job['title'], job['company'], job['source'], job['ext_id'], job['apply_url'], 'clicked') and c['listing_id'][0] == jid, c and c['status'])
         age = time.time() - calendar.timegm(time.strptime(c['clicked_at'], '%Y-%m-%d %H:%M:%S')) if c else 9999
         check('the time stamp is the moment of the click', -5 < age < 120, '%.0f seconds ago' % age)
-        check('a click is not an application and has no applicant: nothing was created in Job Applications or Recruitment, and an anonymous click line names nobody',
-              apps_count() == n_app_c and applicants_count() == n_hr_c and bool(c) and 'applicant_id' not in c and not (c.get('user_id') or c.get('applicant_name') or c.get('email') or c.get('phone')))
+        mine = [a for a in apps(job_key=key_of(job)) if a['user_id'] and a['user_id'][0] == tester['id']]
+        check('the click line names nobody (no name / e-mail, only the user ID for repeat clicks); the signed-in person is in Job Applications as "Redirected to External Site" - never submitted',
+              bool(c) and not (c.get('applicant_name') or c.get('email')) and (c.get('user_id') or [0])[0] == tester['id'] and len(mine) == 1 and mine[0]['state'] == 'submitted'
+              and mine[0]['channel'] == 'apply_now' and not mine[0]['application_date'] and not mine[0]['applicant_id'], [(a['state'], a['channel']) for a in mine])
+        check('... a click creates no Recruitment applicant and no submitted application', applicants_count() == n_hr_c
+              and len(gw.search('llmd.job.application', [['state', 'in', ['submitted', 'confirmed']], ['channel', '!=', 'apply_now'], ['active', 'in', [True, False]]], 5000)) == submitted_c)
         v.open('/jobs/ext/%d/go' % jid)
         cl = sorted(clicks(job_key=key_of(job)), key=lambda x: x['id'])
         check('clicking again is saved as ANOTHER line (every click is saved), marked as a repeat click', len(cl) == 2 and not cl[0]['repeat'] and cl[1]['repeat'])
-        Visitor().open('/jobs/ext/%d/go' % jid)
+        Visitor(signed_in=True).open('/jobs/ext/%d/go' % jid)
         cl = sorted(clicks(job_key=key_of(job)), key=lambda x: x['id'])
-        check('another browser clicking: a third line, not a repeat click; the browsers are told apart only by a random cookie id', len(cl) == 3 and not cl[2]['repeat'] and len({x['visitor_key'] for x in cl}) == 2 and all(x['visitor_key'] for x in cl))
+        check('the same account in another browser: a third line, a repeat click of that account (two browsers = two random cookie ids)', len(cl) == 3 and cl[2]['repeat'] and len({x['visitor_key'] for x in cl}) == 2 and all(x['visitor_key'] for x in cl))
+        check('... and still ONE Job Applications record for the person and the job (no duplicate)', len([a for a in apps(job_key=key_of(job)) if a['user_id'] and a['user_id'][0] == tester['id']]) == 1)
         bot = urllib.request.Request(gw.site_url() + '/jobs/ext/%d/go' % job2['id'], headers={'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)'})
         try:
             urllib.request.build_opener(_NoRedirect()).open(bot, timeout=30)
         except urllib.error.HTTPError as exc:
             bot_status, bot_loc = exc.code, exc.headers.get('Location', '')
-        check('a crawler / link checker is sent on but is NOT counted as a click', bot_status == 303 and bot_loc == job2['apply_url'] and not clicks(job_key=key_of(job2)))
+        check('a crawler / link checker (not signed in) gets the login page and is NOT counted as a click', bot_status == 303 and '/web/login?redirect=' in bot_loc and not clicks(job_key=key_of(job2)))
         # ---- the tracked link of OUR OWN positions
         own = [j for j in gw.search('hr.job', [['website_published', '=', True]], 10) if j['apply_url']]
         if own:
-            status, _b, loc6 = Visitor().open('/jobs/position/%d/go' % own[0]['id'])
+            status, _b, loc6 = Visitor(signed_in=True).open('/jobs/position/%d/go' % own[0]['id'])
             oc = clicks(job_key='hr.job:%d' % own[0]['id'])
             if re.search(r'jooble\.org|adzuna\.|himalayas\.app', own[0]['apply_url']):          # direct links only: a job board page is replaced by our own Odoo form
                 check('our own position whose saved link is a job board page: the tracked Apply Now link sends to OUR Odoo application form (303), ONE click line names that form (source "LLM Decode")',
@@ -477,7 +494,7 @@ def apply_flow(rows, click0):
                   len(sa) == 1 and len(tr) == 1 and tr[0]['state'] == 'submitted' and tr[0]['channel'] == 'own' and tr[0]['applicant_id'][0] == sa[0]['id'] and tr[0]['hr_job_id'][0] == stock[0]['id'] and tr[0]['job_key'] == 'hr.job:%d' % stock[0]['id'], (status, body[:80]))
             r0 = tr[0] if tr else {}
             check('the new application shows in Recruitment > Job Applications by itself, from what the person typed: name, e-mail (no phone), job title, company, external job ID, channel "Our website", status Received, date',
-                  (r0.get('applicant_name'), r0.get('email'), 'phone' in r0, r0.get('job_title'), r0.get('ext_id'), r0.get('channel'), r0.get('state')) == ('ZZ Stock Form', stock_mail, False, stock[0]['name'], str(stock[0]['id']), 'own', 'submitted')
+                  (r0.get('applicant_name'), r0.get('email'), r0.get('phone'), r0.get('job_title'), r0.get('ext_id'), r0.get('channel'), r0.get('state')) == ('ZZ Stock Form', stock_mail, False, stock[0]['name'], str(stock[0]['id']), 'own', 'submitted')
                   and bool(r0.get('application_date')) and r0.get('company') is not None)
             seen = gw.search('llmd.job.application', [['applicant_name', 'ilike', 'zz stock'], ['channel', '=', 'own'], ['state', '=', 'submitted']], 5)
             check('... and the list (search by name + channel + status, newest first) finds it', len(seen) == 1 and seen[0]['id'] == r0.get('id'))
@@ -514,10 +531,10 @@ def apply_flow(rows, click0):
         ar = apps(email=api_mail)
         check('API with the key: the applicant is saved exactly as the provider sent it - confirmed, channel "provider", name, e-mail, provider reference, job snapshot, date received; no phone is kept',
               r['ok'] and r['status'] == 'created' and len(ar) == 1 and (ar[0]['state'], ar[0]['channel'], ar[0]['applicant_name'], ar[0]['email'], ar[0]['provider_ref'], ar[0]['job_title'], ar[0]['ext_id'], ar[0]['apply_url'], ar[0]['confirmed_via'])
-              == ('confirmed', 'provider', 'ZZ Api Person', api_mail, 'zz-ref-1', job2['title'], job2['ext_id'], job2['apply_url'], 'api') and 'phone' not in ar[0] and ar[0]['application_date'], r)
+              == ('confirmed', 'provider', 'ZZ Api Person', api_mail, 'zz-ref-1', job2['title'], job2['ext_id'], job2['apply_url'], 'api') and not ar[0]['phone'] and ar[0]['application_date'], r)
         check('... it creates no Odoo applicant and no click line', bool(ar) and not ar[0]['applicant_id'] and applicants_count() == n_hr1 and not clicks(job_key=key_of(job2)))
         r = jsonrpc(dict(body, phone='+91 98765 43210', name='ZZ Api Person Two'), hdr)
-        check('the same person and job again: the record is UPDATED with what is new, never duplicated', r['status'] == 'updated' and len(apps(email=api_mail)) == 1 and apps(email=api_mail)[0]['applicant_name'] == 'ZZ Api Person Two' and apps_count() == n_app1 + 1)
+        check('the same person and job again: the record is UPDATED with what is new, never duplicated', r['status'] == 'updated' and len(apps(email=api_mail)) == 1 and apps(email=api_mail)[0]['applicant_name'] == 'ZZ Api Person Two' and not apps(email=api_mail)[0]['phone'] and apps_count() == n_app1 + 1)
 
         # ---- the back office
         views = rpc('llmd.job.click', 'get_views', [[[False, 'list'], [False, 'form'], [False, 'search'], [False, 'pivot'], [False, 'graph']]])
@@ -540,6 +557,8 @@ def apply_flow(rows, click0):
             gw.call('delete_record', model='ir.config_parameter', res_id=pid)
         if pid_form:
             gw.call('delete_record', model='ir.config_parameter', res_id=pid_form)
+        for c in gw.search('llmd.job.application', [['id', '>', app_id0], ['channel', '=', 'apply_now'], ['active', 'in', [True, False]]], 500):
+            gw.call('delete_record', model='llmd.job.application', res_id=c['id'])          # the test account's Apply Now records of this run
         for aid in {x for x in created_applicants if x}:
             gw.call('delete_record', model='hr.applicant', res_id=aid)
         for c in gw.search('llmd.job.application', [['email', 'like', 'zz.'], ['active', 'in', [True, False]]], 100) + gw.search('llmd.job.application', [['applicant_name', 'like', 'ZZ '], ['active', 'in', [True, False]]], 100):
@@ -602,9 +621,9 @@ def category_checks():
     pg_m = get(base + '?mode=onsite')[1]
     check('... and a company chip keeps the other filters too', all('mode=onsite' in h for h, _t in links(pg_m, 'o_llmd_co_chip')))
     text_pg = text(pg)
-    check('%s: filters Location (country, city), Experience 0-25+ slider, Work mode, Job Type, Time Posted, Job Function, Role, Skills, Company and Region; no Category list (the page IS one category); no course control; no Salary, no Freelance' % slug,
+    check('%s: filters Location (country, city), Experience 0-25+ slider, Work mode, Job Type, Time Posted, Department, Role, Skills, Company and Region; no Category list (the page IS one category); no course control; no Salary, no Freelance' % slug,
           all(x in pg for x in ('name="region"', 'name="country"', 'name="city"', 'name="exp_min"', 'name="exp_max"', 'name="mode"', 'name="jtype"', 'name="posted"', 'name="function"', 'name="role"', 'name="skill"', 'name="company"'))
-          and 'name="course"' not in pg and 'name="category"' not in pg and 'name="salary"' not in pg and 'Freelance' not in text_pg and 'Industry · Company size' in text_pg)
+          and 'name="course"' not in pg and 'name="category"' not in pg and 'name="salary"' not in pg and 'Freelance' not in text_pg and 'Industry' not in text_pg)
     jt = facet(pg, 'jtype')
     check('%s: the Job Type counts are the real numbers of this category' % slug, [(v, n) for v, _l, n, _c in jt] == [(k, len([r for r in rows_c if r['job_type'] == k])) for k in TYPE_LABELS], jt)
     form = re.search(r'<form[^>]*id="o_llmd_board_form"[^>]*>', pg).group(0)
@@ -651,13 +670,16 @@ def category_checks():
     check('category results: every card with a link has Apply Now = the tracked link of that job (new tab, noopener), as on the detail page', applies and applies == ['/jobs/ext/%d/go' % c['id'] for c in with_link], applies[:2])
     job = by_id[with_link[0]['id']]
     before = len(gw.search('llmd.job.click', [['listing_id', '=', job['id']]], 1000))
-    n_apps = len(gw.search('llmd.job.application', [['active', 'in', [True, False]]], 5000))
-    status, _b, location = Visitor().open('/jobs/ext/%d/go' % job['id'])
+    n_submitted = len(gw.search('llmd.job.application', [['state', 'in', ['submitted', 'confirmed']], ['channel', '!=', 'apply_now'], ['active', 'in', [True, False]]], 5000))
+    anon_status, _b, anon_location = Visitor().open('/jobs/ext/%d/go' % job['id'])
+    check('Apply Now from a card, not signed in: the login page, back to the same Apply Now afterwards', anon_status == 303 and anon_location.endswith('/web/login?redirect=%%2Fjobs%%2Fext%%2F%d%%2Fgo' % job['id']), anon_location[:80])
+    status, _b, location = Visitor(signed_in=True).open('/jobs/ext/%d/go' % job['id'])
     after = gw.search('llmd.job.click', [['listing_id', '=', job['id']]], 1000)
     newest = max(after, key=lambda c: c['id']) if after else {}
-    check('Apply Now from a card: the click is saved (source, external ID, original URL kept), the visitor goes to the original application page, and NO application is created',
+    check('Apply Now from a card, signed in: the click is saved (source, external ID, original URL kept), the visitor goes to the original application page, and NO submitted application is created',
           status == 303 and location == job['apply_url'] and len(after) == before + 1 and newest.get('ext_id') == job['ext_id'] and newest.get('source') == job['source']
-          and newest.get('apply_url') == job['apply_url'] and newest.get('status') == 'clicked' and len(gw.search('llmd.job.application', [['active', 'in', [True, False]]], 5000)) == n_apps,
+          and newest.get('apply_url') == job['apply_url'] and newest.get('status') == 'clicked'
+          and len(gw.search('llmd.job.application', [['state', 'in', ['submitted', 'confirmed']], ['channel', '!=', 'apply_now'], ['active', 'in', [True, False]]], 5000)) == n_submitted,
           '%s -> %s' % (job['ext_id'], location[:60]))
 
     # ---- company pages
@@ -811,7 +833,7 @@ def run_all():
     catalog = gw.call('call_method', model='llmd.course.catalog', ids=None, method='courses')
     pills = re.findall(r'<button\b[^>]*name="rec"[^>]*value="([^"]+)"[^>]*>.*?<span class="o_llmd_cpill_name">(.*?)</span><span class="o_llmd_n">(\d+)</span>', page, re.S)
     in_course = {c['code']: [r for r in rows if ',%s,' % c['code'] in (r['courses'] or '')] for c in catalog}
-    check('"Jobs matched to your LLM Decode courses": one button per course of the catalog (same names, same order), each with its real number of matching jobs',
+    check('"Learn with LLM Decode, Discover Your Career Opportunities": one button per course of the catalog (same names, same order), each with its real number of matching jobs',
           [(v, html.unescape(n)) for v, n, _c in pills] == [(c['code'], c['name']) for c in catalog] and all(int(n) == len(in_course[v]) for v, _n, n in pills), [(v, n) for v, _x, n in pills])
     check('(this database has no eLearning module, so the catalog is the built-in fallback = the four LLM Decode courses, with the words each course teaches from its own page)',
           [c['name'] for c in catalog] == list(COURSES.values()) and not any(c['dynamic'] for c in catalog) and all(c.get('terms') for c in catalog), [(c['code'], len(c.get('terms') or [])) for c in catalog])
@@ -882,15 +904,15 @@ def run_all():
           [c['id'] for c in listing] == mixed(rows)[:12]
           and all(c['apply'] == ('/jobs/ext/%d/go' % c['id'] if by_id[c['id']]['apply_url'] else '') for c in listing), [c['id'] for c in listing][:3])
 
-    # ---- Latest Jobs: the newest by posting date, the last sync, category shortcuts, Load More
+    # ---- Latest Jobs: the newest by posting date, the last sync, category shortcuts, page numbers
     def latest_ids(html_part):
-        return [int(i) for i in re.findall(r'class="o_llmd_lcard_title"><a href="/jobs/ext/(\d+)"', html_part)]
+        return [int(i) for i in re.findall(r'class="o_llmd_lcard_title"><a href="/jobs/(\d+)/[a-z0-9-]+"', html_part)]
     by_date = [r['id'] for r in newest(rows)]
     sec = page.split('id="latest"', 1)[1].split('id="companies"', 1)[0]
     ids = latest_ids(sec)
     check('"Latest Jobs": heading, "Fresh opportunities from companies worldwide", the 12 newest jobs by their posting date, each card with View Details',
           'Latest Jobs' in text(sec) and 'Fresh opportunities from companies worldwide' in text(sec) and ids == by_date[:12]
-          and all('href="/jobs/ext/%d"' % i in sec for i in ids) and text(sec).count('View Details') == len(ids), ids[:3])
+          and all('href="/jobs/%d/' % i in sec for i in ids) and text(sec).count('View Details') == len(ids), ids[:3])
     syncs = [x for x in gw.search('llmd.job.sync', [['finished', '!=', False], ['state', 'in', ['ok', 'partial']]], 5000) if x['created'] or x['updated']]
     last = max((x['finished'] for x in syncs), default=None)
     check('... "Updated ... ago" = the end of the last sync that brought jobs (the sync log), exact time in its tooltip', bool(last) and 'title="Last sync: %s UTC"' % last in sec and 'Updated ' in text(sec), last)
@@ -898,25 +920,25 @@ def run_all():
     fresh = {r['id'] for r in rows if r['posted'] and datetime.datetime.strptime(r['posted'], '%Y-%m-%d %H:%M:%S') >= now - datetime.timedelta(days=3)}
     cells = re.split(r'(?=<div class="o_llmd_lcell)', sec)[1:]
     check('... "New" only on jobs really posted in the last 3 days, and a job without a posting date says so (no made-up date)',
-          all(('o_llmd_newbadge' in c) == (int(re.search(r'/jobs/ext/(\d+)', c).group(1)) in fresh) for c in cells)
-          and all('No posting date' in c for c in cells if not by_id[int(re.search(r'/jobs/ext/(\d+)', c).group(1))]['posted']))
+          all(('o_llmd_newbadge' in c) == (int(re.search(r'/jobs/(?:ext/)?(\d+)', c).group(1)) in fresh) for c in cells)
+          and all('No posting date' in c for c in cells if not by_id[int(re.search(r'/jobs/(?:ext/)?(\d+)', c).group(1))]['posted']))
     chips = [(h, int(re.findall(r'\d+', text(inner))[-1])) for h, inner in links(sec, 'o_llmd_lchip')]
     want = [('/jobs#latest', len(rows))] + [('/jobs?latest_cat=%s#latest' % sl, n) for sl, n in all_cats[:8]]
     check('... category shortcuts: "All jobs" and the 8 biggest categories, with their real counts', chips == want, chips[:4])
     st, b1 = get('/jobs/latest?page=1')
     st2, b2 = get('/jobs/latest?page=2')
     p1, p2 = latest_ids(b1), latest_ids(b2)
-    check('"Load More Jobs" (/jobs/latest?page=2): the next 12 jobs by date, none of them already shown, and it says there are more', st == st2 == 200 and p1 == ids and p2 == by_date[12:24]
+    check('page 2 (/jobs/latest?page=2, the "2" of the page numbers): the next 12 jobs by date, none of page 1, and it says there are more', st == st2 == 200 and p1 == ids and p2 == by_date[12:24]
           and not set(p1) & set(p2) and 'data-more="1"' in b2 and 'href="/jobs?latest=2#latest"' in sec, p2[:3])
     last_page = -(-len(rows) // 12)
     bl = get('/jobs/latest?page=%d' % last_page)[1]
-    check('... the last batch says there is nothing more (the button goes away)', 'data-more="0"' in bl and latest_ids(bl) == by_date[(last_page - 1) * 12:])
+    check('... the last page says there is nothing more (Next is off)', 'data-more="0"' in bl and latest_ids(bl) == by_date[(last_page - 1) * 12:])
     cat = all_cats[2][0]
     in_this = [r['id'] for r in newest([r for r in rows if r['job_category'] == cat])]
     bc = get('/jobs/latest?category=%s&page=1' % cat)[1]
     check('... a category shortcut (%s) loads that category only, newest first, with its own total' % cat, latest_ids(bc) == in_this[:12] and 'data-total="%d"' % len(in_this) in bc)
     nojs = get('/jobs?latest=2&latest_cat=%s' % cat)[1].split('id="latest"', 1)[1].split('id="companies"', 1)[0]
-    check('... without JavaScript the links reload the landing page with one batch more (/jobs?latest=2&latest_cat=...)', latest_ids(nojs) == in_this[:24] and 'active' in (re.search(r'<a[^>]*latest_cat=%s#latest"[^>]*>' % cat, nojs) or [''])[0])
+    check('... without JavaScript the page numbers reload the landing page on that page (/jobs?latest=2&latest_cat=...)', latest_ids(nojs) == in_this[12:24] and 'active' in (re.search(r'<a[^>]*latest_cat=%s#latest"[^>]*>' % cat, nojs) or [''])[0])
 
     # ---- Top 10 countries hiring, and the directory of all countries
     country_n = sorted(Counter(r['country'] for r in rows if r['country']).items(), key=lambda kv: (-kv[1], kv[0]))
@@ -976,9 +998,9 @@ def run_all():
               all(name in text(sec) for name, _k in want) and text(sec).count('a plus') == sum(1 for _n, k in want if k == 'plus'), (r0['id'], text(sec)[:120]))
     bundle28 = re.search(r'<link[^>]+href="(/web/assets/[^"]*web\.assets_frontend[^"]*\.css)"', page)
     css28 = get(bundle28.group(1))[1] if bundle28 else ''
-    check('the dark theme: dark tokens and color-scheme on the board, a dark header and footer on the board pages only, motion off with reduced motion',
-          '--bg:#090c17' in css28.replace(' ', '') and 'color-scheme:dark' in css28.replace(' ', '') and 'body:has(#wrap.o_llmd_board)' in css28
-          and 'prefers-reduced-motion' in css28 and 'o_llmd_rv_on' in css28)
+    check('the light theme of learn.llmdecode.com: light tokens and color-scheme on the board, its header and footer on the board pages only, motion off with reduced motion',
+          '--bg:#ffffff' in css28.replace(' ', '') and '--grad:linear-gradient(135deg,#2563eb0%,#7c3aed100%)' in css28.replace(' ', '') and 'color-scheme:light' in css28.replace(' ', '')
+          and 'body:has(#wrap.o_llmd_board)' in css28 and 'prefers-reduced-motion' in css28 and 'o_llmd_rv_on' in css28 and '#090c17' not in css28)
     st_home, home = get('/')
     check('... other pages of the site keep their own theme (the home page has no board on it)', st_home == 200 and 'o_llmd_board' not in home)
 
@@ -1015,7 +1037,8 @@ def run_all():
           and not re.search(r'\d', text(why)))
     bundle = re.search(r'<link[^>]+href="(/web/assets/[^"]*web\.assets_frontend[^"]*\.css)"', page)
     css = get(bundle.group(1))[1] if bundle else ''
-    check('one font: only Manrope is loaded, and no rule of the board uses Fraunces or Caveat', 'family=Manrope' in page and 'Fraunces' not in page and 'Caveat' not in page
+    check('the fonts of learn.llmdecode.com: Inter and Inter Tight are loaded (once, for the whole site), no Manrope any more, and no rule of the board uses Fraunces or Caveat',
+          page.count('family=Inter:') == 1 and 'family=Inter+Tight:' in page and 'Manrope' not in page and 'Fraunces' not in page and 'Caveat' not in page
           and bool(css) and not re.search(r'\.o_llmd_[\w-]+[^{}]*\{[^}]*(Fraunces|Caveat)', css))
     check('the Jobs menu of the website is marked active on the board pages', all(re.search(r'<a role="menuitem" href="/jobs" class="nav-link active"', get(p)[1]) for p in ('/jobs', '/jobs?view=all', '/jobs/category/sales')))
 
@@ -1029,12 +1052,13 @@ def run_all():
           bool(side) and 'name="course"' not in page and 'o_llmd_fchip_course' not in page and not re.search(r'(?i)llm decode course|any course|select your course|\bcourse\b', text(side)))
     reg = re.findall(r'<option value="([^"]+)"[^>]*>([^<]*)\((\d+)\)</option>', (re.search(r'<select id="llmd_region".*?</select>', page, re.S) or [''])[0])
     check('Region filter: the world regions and the regions of India that have jobs, each with its count', [(v, int(n)) for v, _l, n in reg] == region_want, reg)
-    check('filters: Location (country, city), Experience 0-25+ (two handles, Reset), Work mode, Job Type, Time Posted, Category, Job Function, Role, Skills, Company; no Salary, no Freelance',
+    check('filters: Location (country, city), Experience 0-25+ (two handles, Reset), Work mode, Job Type, Time Posted, Category, Department, Role, Skills, Company; no Salary, no Freelance',
           all(x in page for x in ('name="region"', 'name="country"', 'name="city"', 'name="exp_min"', 'name="exp_max"', 'name="mode"', 'name="jtype"', 'name="posted"', 'name="category"', 'name="function"', 'name="role"', 'name="skill"', 'name="company"'))
           and 'name="salary"' not in page and 'Freelance' not in t and 'Salary' not in t and 'class="o_llmd_range_reset"' in page
           and re.findall(r'<div class="o_llmd_range_scale"[^>]*>(.*?)</div>', page, re.S) and text(re.findall(r'<div class="o_llmd_range_scale"[^>]*>(.*?)</div>', page, re.S)[0]).split() == ['0', '5', '10', '15', '20', '25+'])
     check('Role, Skills and Company lists can be searched (a search box above each list)', page.count('class="form-control o_llmd_listfilter"') == 3)
-    check('Industry and Company size are NOT offered as filters: no source gives them, and the panel says so', 'Industry · Company size' in t and 'Not available' in t and 'name="industry"' not in page and 'name="company_size"' not in page)
+    check('Company size is a filter (approximate bands, the note says so); Industry is not in the panel at all (no source gives it)',
+          'name="size"' in page and 'Company size' in t and 'Approximate employee count' in t and 'Industry' not in t and 'name="industry"' not in page)
     modes = re.findall(r'<label class="btn btn-outline-primary"[^>]*>(.*?)</label>', page, re.S)
     check('Work mode: All Jobs, Remote, Hybrid, On-site', [text(m).strip() for m in modes] == ['All Jobs', 'Remote', 'Hybrid', 'On-site'], [text(m).strip() for m in modes])
     jt = facet(page, 'jtype')
@@ -1052,7 +1076,7 @@ def run_all():
     check('sorting: Most relevant / Most recent', [text(a).strip() for a in re.findall(r'<a\b[^>]*>(.*?)</a>', menu, re.S)] == ['Most relevant', 'Most recent'])
     cs = cards(page)
     check('every job card: View Details (the detail page) and Apply Now (the tracked link that opens the original application page)', bool(cs)
-          and all(c['see'] == '/jobs/ext/%d' % c['id'] and c['apply'] == ('/jobs/ext/%d/go' % c['id'] if by_id[c['id']]['apply_url'] else '') for c in cs if c['id'] in by_id), '%d cards' % len(cs))
+          and all(c['see'] == by_id[c['id']]['page_url'] and c['apply'] == ('/jobs/ext/%d/go' % c['id'] if by_id[c['id']]['apply_url'] else '') for c in cs if c['id'] in by_id), '%d cards' % len(cs))
     check('a job card links its company page and its category page', all(re.search(r'href="/jobs/company/%s"' % re.escape(BC.slugify(by_id[c['id']]['company'])), c['html']) for c in cs if by_id.get(c['id'], {}).get('company'))
           and all('href="/jobs/category/%s"' % by_id[c['id']]['job_category'] in c['html'] for c in cs if by_id.get(c['id'], {}).get('job_category')))
 
@@ -1198,7 +1222,7 @@ def run_all():
         go = Visitor().open('/jobs/ext/%d/go' % victim)
         saved = gw.search('llmd.job.click', [['listing_id', '=', victim], ['status', '=', 'no_link'], ['id', '>', click0]], 50)
         check('apply_url %-34r -> no employer link, the URL is not on the page, a disabled Apply Now, /go sends the visitor back to the job and saves the click as "no_link"' % bad,
-              '/jobs/ext/%d/go' % victim not in dpage and (not bad or bad not in dpage) and 'valid application link is not available' in text(dpage) and go[0] == 303 and go[2].endswith('/jobs/ext/%d' % victim)
+              '/jobs/ext/%d/go' % victim not in dpage and (not bad or bad not in dpage) and 'valid application link is not available' in text(dpage) and go[0] == 303 and go[2].endswith(by_id[victim]['page_url'])
               and len(saved) == n_nolink + 1 and not saved[-1]['apply_url'])
     gw.call('update_record', model='llmd.job.listing', res_id=victim, values={'apply_url': old})
     tmp = gw.call('create_record', model='llmd.job.listing', values={'source': 'test', 'ext_id': 'no-description-test-%d' % int(time.time()), 'title': 'Listing without a description', 'company': 'Test Co',
@@ -1293,7 +1317,7 @@ def run_all():
               heads == [g['heading'] for g in block['point_groups'] if g['heading']] and not any(SUM.is_heading_point(a + b) for a, b in parts)
               and [a + b for a, b in parts] == block['points'] and nums == [str(i) for i in range(1, len(block['points']) + 1)], '#%d: %s' % (headed['id'], heads))
     sim = re.search(r'<section class="o_llmd_similar o_llmd_board">(.*?)</section>', dpage, re.S)
-    sim_ids = list(dict.fromkeys(int(x) for x in re.findall(r'href="/jobs/ext/(\d+)"', sim.group(1)))) if sim else []
+    sim_ids = list(dict.fromkeys(int(x) for x in re.findall(r'href="/jobs/(\d+)/[a-z0-9-]+"', sim.group(1)))) if sim else []
 
     def keys(row):
         return (set((row.get('roles') or '').split(',')) | set((row.get('tags') or '').split(','))) - {''}
@@ -1363,10 +1387,18 @@ def run_all():
     finally:
         if made_pos:
             gw.call('delete_record', model='hr.job', res_id=made_pos)
+    sample = next((r for r in rows if r['apply_url']), None)
+    if sample:
+        status, _b, loc = Visitor().open('/jobs/ext/%d/go' % sample['id'])
+        check('default: an anonymous Apply Now goes to the login page first (the signed-in flow itself: tests/apply_login_test.py)',
+              status == 303 and loc.endswith('/web/login?redirect=%%2Fjobs%%2Fext%%2F%d%%2Fgo' % sample['id']), loc[:80])
+    app_id0 = max([a['id'] for a in gw.search('llmd.job.application', [['active', 'in', [True, False]]], 1)] or [0])
     try:
         category_checks()
         apply_flow(rows, click0)
     finally:
+        for c in gw.search('llmd.job.application', [['id', '>', app_id0], ['channel', '=', 'apply_now'], ['active', 'in', [True, False]]], 500):
+            gw.call('delete_record', model='llmd.job.application', res_id=c['id'])          # the test account's Apply Now records (signed-in cards)
         ids = [c['id'] for c in gw.search('llmd.job.click', [['id', '>', click0]], 20000)]
         if ids:
             rpc('llmd.job.click', 'unlink', [ids])

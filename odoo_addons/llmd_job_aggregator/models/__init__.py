@@ -1,5 +1,6 @@
 from . import hr_job
 from . import job_source
+from . import company
 from . import listing
 from . import courses
 from . import application

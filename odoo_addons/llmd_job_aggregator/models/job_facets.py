@@ -390,6 +390,48 @@ def salary_ranges_of(low, high):
     return [key for key, _label, lo, hi in SALARY_RANGES if high >= lo and (hi is None or low < hi)]
 
 
+# ---------------------------------------------------------------------------------------------------------------- the Salary filter: one band per job
+# Each salary stays in the currency the employer states (no exchange rate is guessed): rupees in lakhs per year (LPA), dollars / euros / pounds in thousands per
+# year. A job's band is the band of its LOWEST stated amount. A salary that cannot be read for sure (another currency, hourly pay, no amount) gets no band.
+SALARY_BANDS = [('inr-0-10', '₹0–10 LPA', 'inr', 0, 10), ('inr-10-25', '₹10–25 LPA', 'inr', 10, 25), ('inr-25-50', '₹25–50 LPA', 'inr', 25, 50), ('inr-50', '₹50 LPA+', 'inr', 50, None)]
+for _cur, _sym in (('usd', '$'), ('eur', '€'), ('gbp', '£')):
+    SALARY_BANDS += [('%s-0-100' % _cur, '%s0–100K' % _sym, _cur, 0, 100), ('%s-100-150' % _cur, '%s100K–150K' % _sym, _cur, 100, 150),
+                     ('%s-150-200' % _cur, '%s150K–200K' % _sym, _cur, 150, 200), ('%s-200-250' % _cur, '%s200K–250K' % _sym, _cur, 200, 250),
+                     ('%s-250' % _cur, '%s250K+' % _sym, _cur, 250, None)]
+SALARY_BAND_LABELS = {key: label for key, label, _c, _lo, _hi in SALARY_BANDS}
+_FOREIGN = (('usd', re.compile(r'\$|\busd\b')), ('eur', re.compile(r'€|\beur\b')), ('gbp', re.compile(r'£|\bgbp\b')))
+_ANY_OTHER = re.compile(r'₹|\binr\b|\bsgd\b|\baud\b|\bcad\b|\baed\b|\bchf\b|\bhkd\b|\bjpy\b|¥')
+_K_AMOUNT = re.compile(r'(\d[\d,]*(?:\.\d+)?)\s*(k|m)?(?![a-z])')
+
+
+def salary_k(text):
+    """(currency, lowest yearly amount in thousands) for a salary in dollars, euros or pounds ("$177.7K – $266.5K", "€60,000 - €80,000 per year");
+    ('', 0.0) when it is in another currency, mixes currencies, is hourly / daily or gives no believable yearly amount."""
+    t = (text or '').lower().replace('–', '-').replace('—', '-')
+    found = [cur for cur, rx in _FOREIGN if rx.search(t)]
+    if len(found) != 1 or _ANY_OTHER.search(t) or _PER_SHORT.search(t):
+        return ('', 0.0)
+    values = []
+    for number, unit in _K_AMOUNT.findall(t.split('•')[0]):                 # the first part is the pay; what follows (equity %, bonus) is not
+        n = float(number.replace(',', ''))
+        value = n if unit == 'k' else n * 1000 if unit == 'm' else n / 1000 if n >= 1000 else 0.0
+        if value > 0:
+            values.append(value)
+    if not values:
+        return ('', 0.0)
+    low = min(values[:2]) * (12 if _PER_MONTH.search(t) else 1)
+    return (found[0], round(low, 1)) if 10 <= low <= 5000 else ('', 0.0)
+
+
+def salary_band(text):
+    """The SALARY_BANDS key of a job's salary (by its lowest amount, in its own currency), or '' when it has none that can be read for sure."""
+    low, _high = salary_lpa(text)
+    cur, value = ('inr', low) if low > 0 else salary_k(text)
+    if not cur:
+        return ''
+    return next((key for key, _l, c, lo, hi in SALARY_BANDS if c == cur and value >= lo and (hi is None or value < hi)), '')
+
+
 # ---------------------------------------------------------------------------------------------------------------- one call for a listing
 def facets(title, location, countries, employment_type, seniority, text):
     return {'exp_level': exp_level(title, seniority, text), 'job_type': job_type(employment_type, title), 'work_mode': work_mode(location, title, text),

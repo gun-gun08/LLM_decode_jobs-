@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- The fonts of the LLM Decode site (learn.llmdecode.com): Inter for text, Inter Tight for headings - loaded once for every website page (job board, job pages, login). -->
+    <template id="llmd_fonts" inherit_id="website.layout" name="LLMD: Inter fonts">
+        <xpath expr="//head" position="inside">
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Inter+Tight:wght@600;700;800&amp;display=swap"/>
+        </xpath>
+    </template>
+
     <!-- Job detail page of OUR positions: the shared layout (views/job_view.xml) - header, short cards, Read Full Description, one Apply Now card.
          A page somebody wrote by hand keeps the stock layout (with ONE Apply Now button). -->
     <template id="job_detail_layout" inherit_id="website_hr_recruitment.detail" name="LLMD: job detail layout">

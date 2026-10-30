@@ -37,8 +37,38 @@ n_app, n_rec = Applicant.search_count([]), App.search_count([])
 c1 = Click.record_click(listing=a, visitor='visitor-aaaaaaaaaaaaaaaa')
 check('a click saves a line with time, job title, company, source, external job ID, apply URL and status "clicked"',
       (c1.job_title, c1.company, c1.source, c1.ext_id, c1.apply_url, c1.status, c1.listing_id) == ('Sales Manager', 'Acme', 'Adzuna', 'orm-a', 'https://careers.example.com/orm-a', 'clicked', a) and bool(c1.clicked_at) and c1.job_key == 'ext:Adzuna:orm-a')
-check('a click carries NO personal data: the model has no user, name, e-mail or phone field, and nothing is created in Job Applications or Recruitment',
-      not ({'user_id', 'applicant_name', 'email', 'phone', 'logged_in', 'applicant_id'} & set(Click._fields)) and App.search_count([]) == n_rec and Applicant.search_count([]) == n_app)
+check('an anonymous click names nobody (no user, name, e-mail; the model has no phone or applicant), and nothing is created in Job Applications or Recruitment',
+      not (c1.user_id or c1.applicant_name or c1.email) and not ({'phone', 'logged_in', 'applicant_id'} & set(Click._fields)) and App.search_count([]) == n_rec and Applicant.search_count([]) == n_app)
+_signed = env['res.users'].create({'name': 'Orm Click Person', 'login': 'orm.click@example.com', 'email': 'Orm.Click@Example.com', 'group_ids': [(6, 0, [env.ref('base.group_portal').id])]})
+c_user = Click.record_click(listing=a, visitor='visitor-uuuuuuuuuuuuuuuu', user=_signed)
+check('a signed-in click line keeps only the user ID (name and e-mail are kept in Job Applications) - a click line alone makes no record there',
+      c_user.user_id == _signed and not c_user.applicant_name and not c_user.email and App.search_count([]) == n_rec and Applicant.search_count([]) == n_app)
+_info = App.job_info(listing=a)
+an1 = App.record_apply_now(_info, _signed, True)
+check('Apply Now of a signed-in user -> ONE Job Applications record: name, e-mail, user ID, job, internal + external job ID, "Received", channel Apply Now, no application date',
+      (an1.applicant_name, an1.email, an1.user_id, an1.job_title, an1.internal_job_id, an1.ext_id, an1.state, an1.channel, an1.application_date, an1.click_count, an1.application_type)
+      == ('Orm Click Person', 'orm.click@example.com', _signed, 'Sales Manager', a.id, 'orm-a', 'submitted', 'apply_now', False, 1, 'external_apply_click') and bool(an1.clicked_at) and bool(an1.activity_date))
+an2 = App.record_apply_now(_info, _signed, True)
+check('... the same account and job again: the SAME record (no duplicate); a click right after the first one is the same event (count stays 1)', an2 == an1 and an1.click_count == 1
+      and App.search_count([('job_key', '=', _info['job_key']), ('user_id', '=', _signed.id)]) == 1)
+an1.clicked_at = '2020-01-01 00:00:00'
+App.record_apply_now(_info, _signed, True)
+check('... a later click counts (2) and moves the click time', an1.click_count == 2 and an1.clicked_at > fields.Datetime.to_datetime('2020-01-02'))
+_own_info = App.job_info(job=env['hr.job'].with_context(llmd_skip=True).create({'name': 'ORM Apply Now position'}))
+an3 = App.record_apply_now(_own_info, _signed, False)
+check('Apply Now that leads to a form of ours -> "Received" too; the employer\'s link afterwards -> the same record, still "Received"',
+      an3.state == 'submitted' and App.record_apply_now(_own_info, _signed, True) == an3 and an3.state == 'submitted')
+an1.write({'state': 'submitted', 'application_date': fields.Datetime.now()})
+App.record_apply_now(_info, _signed, True)
+check('a submitted record stays submitted when the person clicks Apply Now again (never taken back)', an1.state == 'submitted')
+_nomail = env['res.users'].create({'name': 'Orm No Mail', 'login': 'orm-nomail-login', 'group_ids': [(6, 0, [env.ref('base.group_portal').id])]})
+an4 = App.record_apply_now(_info, _nomail, True)
+check('an account without a valid e-mail is recorded by its user ID (no made-up e-mail)', an4.identity_key == 'u:%d' % _nomail.id and not an4.email and an4.user_id == _nomail)
+check('Job Type as shown: the job\'s own value, "Not specified" when it gives none (or only spaces) - the stored value is not changed',
+      App.new({'job_type': 'Contract'}).job_type_label == 'Contract' and App.new({'job_type': False}).job_type_label == 'Not specified' and App.new({'job_type': '   '}).job_type_label == 'Not specified')
+(an1 | an3 | an4).unlink()
+check('the public user is never saved as a person', not Click.record_click(listing=a, visitor='visitor-pppppppppppppppp', user=env.ref('base.public_user')).user_id)
+(c_user | Click.search([('visitor_key', '=', 'visitor-pppppppppppppppp')])).unlink()
 c2 = Click.record_click(listing=a, visitor='visitor-aaaaaaaaaaaaaaaa')
 check('the same browser clicking the same job again is saved as ANOTHER line (every click is saved), marked as a repeat click', c2 != c1 and c2.repeat and not c1.repeat and Click.search_count([('job_key', '=', c1.job_key)]) == 2)
 c3 = Click.record_click(listing=a, visitor='visitor-bbbbbbbbbbbbbbbb')
@@ -72,8 +102,8 @@ fake_request.httprequest.path = '/website/form/hr.applicant'
 with mock.patch('odoo.addons.llmd_job_aggregator.models.application.request', new=fake_request):          # a website form posts to /website/form/<model>
     web = Applicant.create({'partner_name': 'Web Person', 'email_from': 'web@example.com', 'partner_phone': '+91 98765 43210', 'job_id': own.id})
 web_rec = App.search([('applicant_id', '=', web.id)])
-check('an applicant created by a website form (the person applied on our site) is channel "Our website (Odoo form)" with the name and e-mail - no phone is kept', (web_rec.channel, web_rec.applicant_name, web_rec.email) == ('own', 'Web Person', 'web@example.com')
-      and 'phone' not in App._fields)
+check('an applicant created by a website form (the person applied on our site) is channel "Our website (Odoo form)" with the name and e-mail - no phone is kept', (web_rec.channel, web_rec.applicant_name, web_rec.email, web_rec.phone)
+      == ('own', 'Web Person', 'web@example.com', False))
 again = Applicant.create({'partner_name': 'Web Person', 'email_from': 'WEB@example.com', 'partner_phone': '+91 98765 43210', 'job_id': own.id})
 check('the same person applying again for the same job (e-mail in capitals) makes NO second record: still one, now pointing to the newest applicant', App.search_count([('job_key', '=', web_rec.job_key), ('email', '=', 'web@example.com')]) == 1 and web_rec.applicant_id == again)
 web.write({'partner_name': 'Web Person Renamed', 'partner_phone': '+91 90000 00000'})
@@ -99,9 +129,10 @@ check('the column names are Applicant Name, Email, Job Title, Company, External 
                                                                                                                                             'channel': 'Channel', 'state': 'Application Status', 'application_date': 'Application Date'}, labels)
 import re as _re
 arch = App.get_views([(False, 'list')])['views']['list']['arch']
-shown = [f for f, attrs in _re.findall(r'<field name="(\w+)"([^>]*)/?>', arch) if 'optional="hide"' not in attrs]
-check('the list view shows exactly these columns, in this order (name, e-mail, the job with its department, job type and experience, how it was applied for, who posted the job; no phone), and Confirm / Withdraw / Back to Received for the selected rows',
-      shown == ['applicant_name', 'email', 'job_title', 'company', 'department', 'job_type', 'experience_required', 'ext_id', 'application_type', 'posted_type', 'state', 'application_date'] and all(b in arch for b in ('action_confirm', 'action_withdraw', 'action_receive')), shown)
+shown = [f for f, attrs in _re.findall(r'<field name="(\w+)"([^>]*)/?>', arch) if 'optional="hide"' not in attrs and 'column_invisible' not in attrs]
+check('the list view shows exactly these columns, in this order (name, e-mail - no User column -, the job with its department, job type ("Not specified" when none), experience ("Not specified" when none) and internal / external ID, how it was applied for, who posted the job, status, click time, resumes - no Application Date), and Confirm / Withdraw / Back to Received for the selected rows',
+      shown == ['applicant_name', 'email', 'job_title', 'company', 'department', 'job_type_label', 'experience_label', 'internal_job_id', 'ext_id', 'application_type', 'posted_type',
+                'state', 'clicked_at', 'resume_count'] and all(b in arch for b in ('action_confirm', 'action_withdraw', 'action_receive')), shown)
 with mock.patch.object(type(App), '_track_stock_applicant', side_effect=RuntimeError('boom')):
     ok = Applicant.create({'partner_name': 'Stock Two', 'email_from': 'stock2@example.com', 'job_id': own.id})
 check('if the tracking itself fails, Odoo\'s own application form still works (the applicant is saved)', bool(ok) and ok.exists())
@@ -123,7 +154,7 @@ rec, status = App.submit_own(fl, vals_form, 'Asha CV.pdf', 'application/pdf', PD
 ap = rec.applicant_id
 att = env['ir.attachment'].search([('res_model', '=', 'hr.applicant'), ('res_id', '=', ap.id)])
 check('a submission saves an Odoo applicant (name, e-mail - a phone sent anyway is not kept) filed under an unpublished position made for the job that points back to the listing',
-      status == 'created' and (ap.partner_name, ap.email_from, ap.partner_phone) == ('Asha Verma', 'asha.form@example.com', False) and ap.job_id.llmd_listing_id == fl and not ap.job_id.website_published
+      status == 'created' and (ap.partner_name, ap.email_from, ap.partner_phone, rec.phone) == ('Asha Verma', 'asha.form@example.com', False, False) and ap.job_id.llmd_listing_id == fl and not ap.job_id.website_published
       and Applicant.search_count([]) == n_hr + 1 and App.search_count([]) == n_rec + 1)
 check('... with the resume attached byte for byte, and the message, job, company, external job ID and original link in the applicant\'s note (HTML-escaped)',
       len(att) == 1 and att.name == 'Asha CV.pdf' and base64.b64decode(att.datas) == PDF and all(x in str(ap.applicant_notes) for x in ('Data Analyst', 'Form Co', 'orm-form', 'https://careers.example.com/orm-form'))
@@ -171,12 +202,12 @@ r = App.process_api(dict(good, name='', email='bad'), authorized=True)
 check('invalid data is answered with the field errors and nothing is saved', r['error'] == 'validation' and {'name', 'email'} <= set(r['fields']) and 'consent' not in r['fields'] and App.search_count([]) == n_rec)
 r = App.process_api(good, authorized=True)
 rec = App.browse(r['id'])
-check('with the key: the applicant is saved as the provider sent it - confirmed, channel provider, e-mail in lower case, provider reference, date received, "api"; no phone is kept',
+check('with the key: the applicant is saved as the provider sent it - confirmed, channel provider, e-mail in lower case, provider reference, date received, "api"; no phone (none sent)',
       r['ok'] and r['status'] == 'created' and (rec.state, rec.channel, rec.email, rec.applicant_name, rec.provider_ref, rec.confirmed_via) == ('confirmed', 'provider', 'asha@example.com', 'Asha Verma', 'prov-123', 'api')
       and bool(rec.application_date) and (rec.job_title, rec.company, rec.source, rec.ext_id, rec.apply_url) == ('Sales Manager', 'Acme', 'Adzuna', 'orm-api', 'https://careers.example.com/orm-api'), (r, rec.state))
 check('... it does not create an Odoo applicant and no click line', not rec.applicant_id and Click.search_count([('job_key', '=', rec.job_key)]) == 0)
 r2 = App.process_api(dict(good, name='Asha V. Verma', phone='+91 98765 43210'), authorized=True)
-check('the same person for the same job again: the record is UPDATED with what is new, never duplicated', r2['status'] == 'updated' and r2['id'] == rec.id and rec.applicant_name == 'Asha V. Verma' and App.search_count([('job_key', '=', rec.job_key)]) == 1)
+check('the same person for the same job again: the record is UPDATED with what is new (a phone sent is not kept), never duplicated', r2['status'] == 'updated' and r2['id'] == rec.id and rec.applicant_name == 'Asha V. Verma' and not rec.phone and App.search_count([('job_key', '=', rec.job_key)]) == 1)
 check('job given as listing_id, as source + ext_id and as hr_job_id all resolve', all(App.process_api({'job': j, 'name': 'Zed Zed', 'email': 'zed%d@example.com' % i}, authorized=True)['ok'] for i, j in enumerate(({'listing_id': nb.id}, ref, {'hr_job_id': own.id}))))
 rec.action_withdraw()
 check('a withdrawn application cannot be confirmed again - neither by a recruiter nor by the API', App.process_api(good, authorized=True)['error'] == 'withdrawn' and rec.state == 'withdrawn')

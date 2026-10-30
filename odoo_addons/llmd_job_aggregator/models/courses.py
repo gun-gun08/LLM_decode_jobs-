@@ -8,6 +8,7 @@ gives its course terms (board_config.COURSE_TERMS), which rank those jobs and sa
 """
 import json
 import os
+from urllib.parse import urlencode
 import re
 
 from odoo import api, models
@@ -15,6 +16,13 @@ from odoo import api, models
 from . import board_config as C
 
 _SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'course_snapshot.json')
+# Without eLearning (the local copy) a course's page and sign-up are those of the LLM Decode site the snapshot was taken from (its `page` field, checked: 200).
+LEARN_SITE = 'https://learn.llmdecode.com'
+
+
+def _signup(base, page):
+    """The site's sign-up page; after signing up the visitor lands on the course (Odoo's /web/signup keeps `redirect`). '' without a course page."""
+    return '%s/web/signup?%s' % (base, urlencode({'redirect': page})) if page else ''
 
 
 def _plain(html, limit=600):
@@ -39,15 +47,19 @@ class LlmdCourseCatalog(models.AbstractModel):
 
     @api.model
     def courses(self):
-        """[{'code', 'name', 'profiles', 'words', 'dynamic', 'subtitle', 'terms', 'url'}] in the order of the course list on the site."""
+        """[{'code', 'name', 'profiles', 'words', 'dynamic', 'subtitle', 'terms', 'url', 'signup'}] in the order of the course list on the site.
+        url = the course's own page, signup = the site's sign-up that comes back to that page ('' both when the course has no page),
+        catalog = the site's list of all courses (eLearning's /slides)."""
         if not self.has_course_data():
             snap = _snapshot()
             out = []
             for code, name in C.COURSES:
                 page = snap.get(code) or {}
                 text = ' '.join([name, page.get('subtitle') or '', page.get('content') or ''])
+                path = page.get('page') or ''
                 out.append({'code': code, 'name': name, 'profiles': [code], 'words': [], 'dynamic': False, 'subtitle': page.get('subtitle') or '',
-                            'terms': C.course_terms(text), 'url': ''})
+                            'terms': C.course_terms(text), 'url': LEARN_SITE + path if path else '', 'signup': _signup(LEARN_SITE, path),
+                            'catalog': LEARN_SITE + '/slides'})
             return out
         Channel = self.env['slide.channel'].sudo()
         domain = []
@@ -68,7 +80,8 @@ class LlmdCourseCatalog(models.AbstractModel):
                              _plain(channel.description_short, 4000) if 'description_short' in Channel._fields else '', lessons])
             subtitle = _plain(channel.description_short, 160) if 'description_short' in Channel._fields else ''
             out.append({'code': 'c%d' % channel.id, 'name': channel.name, 'profiles': profiles, 'words': [] if profiles else C.course_words(channel.name), 'dynamic': True,
-                        'subtitle': subtitle, 'terms': C.course_terms(full), 'url': getattr(channel, 'website_url', '') or ''})
+                        'subtitle': subtitle, 'terms': C.course_terms(full), 'url': getattr(channel, 'website_url', '') or '',
+                        'signup': _signup('', getattr(channel, 'website_url', '') or ''), 'catalog': '/slides'})
         return out
 
     @api.model

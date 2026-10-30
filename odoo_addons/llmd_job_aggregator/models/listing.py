@@ -8,12 +8,14 @@ import json
 import logging
 import re
 from datetime import timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 from . import board_config as C
+from . import company as CO
+from . import urls as U
 from . import job_facets as F
 from . import language as LANG
 from . import skill_map as SK
@@ -35,6 +37,10 @@ REDIRECT_HOSTS = ('jooble.org', 'adzuna.', 'himalayas.app')     # job boards who
 _STATED_YEARS = re.compile(r'\b\d{1,2}\s*(?:[-–—]|to)\s*\d{1,2}\s*\+?\s*(?:years?|yrs?)\b|\b\d{1,2}\s*\+\s*(?:years?|yrs?)\b|\b\d{1,2}\s*(?:years?|yrs?)\b', re.I)
 _TITLE_FRESHER = re.compile(r'\bfreshers?\b', re.I)
 _TITLE_ENTRY = re.compile(r'\bentry[- ]?level\b', re.I)
+# the fields a Recruitment manager may change by hand in the backend; a field changed by hand is kept by every later sync (manual_fields) until "Reset to source values"
+FACET_FIELDS = ('work_mode', 'job_type', 'exp_level', 'india', 'city', 'country')
+EDITABLE_FIELDS = ('title', 'company', 'location', 'countries', 'employment_type', 'seniority', 'salary', 'categories', 'posted', 'description_html',
+                   'short_description', 'apply_url', 'source_url', 'active') + FACET_FIELDS
 
 
 def is_board_link(url):
@@ -43,14 +49,24 @@ def is_board_link(url):
     return any(h in host for h in REDIRECT_HOSTS)
 
 
-def direct_links_only(env):
-    """True while only direct links are used (default): system parameter llmd_agg.direct_links_only = 0 / 1, else board_config.DIRECT_LINKS_ONLY."""
-    value = (env['ir.config_parameter'].sudo().get_param('llmd_agg.direct_links_only') or '').strip().lower()
+def _switch(env, param, default):
+    """A yes/no system parameter (0 / 1, false / true, off / on, no / yes); anything else = the default of board_config."""
+    value = (env['ir.config_parameter'].sudo().get_param(param) or '').strip().lower()
     if value in ('0', 'false', 'off', 'no'):
         return False
     if value in ('1', 'true', 'on', 'yes'):
         return True
-    return bool(C.DIRECT_LINKS_ONLY)
+    return bool(default)
+
+
+def direct_links_only(env):
+    """True while only direct links are used (default): system parameter llmd_agg.direct_links_only = 0 / 1, else board_config.DIRECT_LINKS_ONLY."""
+    return _switch(env, 'llmd_agg.direct_links_only', C.DIRECT_LINKS_ONLY)
+
+
+def apply_login_required(env):
+    """True while Apply Now asks the visitor to sign in first (default): system parameter llmd_agg.apply_login = 0 / 1, else board_config.APPLY_LOGIN."""
+    return _switch(env, 'llmd_agg.apply_login', C.APPLY_LOGIN)
 
 
 def valid_url(url):
@@ -119,11 +135,14 @@ class LlmdJobListing(models.Model):
     fetched_at = fields.Datetime()
 
     # what the Jobs page filters on, worked out from the job's own text (models/job_facets.py); stored so the filters are plain database searches
-    exp_level = fields.Char(string='Experience level', compute='_compute_facets', store=True, index=True)
-    job_type = fields.Char(string='Job type', compute='_compute_facets', store=True, index=True)
-    work_mode = fields.Char(string='Work mode', compute='_compute_facets', store=True, index=True)
-    india = fields.Boolean(string='In India', compute='_compute_facets', store=True, index=True)
-    city = fields.Char(string='City (India)', compute='_compute_facets', store=True, index=True)
+    exp_level = fields.Char(string='Experience level', compute='_compute_facets', store=True, index=True, readonly=False,
+                            help='fresher, internship, entry, mid or senior (empty = not stated).')
+    job_type = fields.Char(string='Job type', compute='_compute_facets', store=True, index=True, readonly=False,
+                           help='fulltime, parttime, internship or contract (empty = not stated).')
+    work_mode = fields.Char(string='Work mode', compute='_compute_facets', store=True, index=True, readonly=False,
+                            help='remote, hybrid or onsite (empty = not stated).')
+    india = fields.Boolean(string='In India', compute='_compute_facets', store=True, index=True, readonly=False)
+    city = fields.Char(string='City (India)', compute='_compute_facets', store=True, index=True, readonly=False)
     salary_min_lpa = fields.Float(string='Salary from (LPA)', compute='_compute_salary_lpa', store=True, index=True, digits=(8, 2),
                                   help='The stated salary in lakhs of rupees per year (0 when the job states none, or only in another currency).')
     salary_max_lpa = fields.Float(string='Salary to (LPA)', compute='_compute_salary_lpa', store=True, index=True, digits=(8, 2))
@@ -133,8 +152,19 @@ class LlmdJobListing(models.Model):
     category_label = fields.Char(string='Category', compute='_compute_category', store=True, index=True, help='The name of the job category, as the website shows it.')
     function_label = fields.Char(string='Function', compute='_compute_category', store=True, help='The name of the job function, as the website shows it.')
     page_url = fields.Char(string='Page on the website', compute='_compute_backend_links')
+    # the addresses: /jobs/<id>/<title-place> (website_path); url_slug is the short /jobs/<slug> that moves there (title + place, the job ID added only when
+    # another job, a region or a place already has it - set once, then kept); the company record of /companies/<slug> (the same company name -> the same record)
+    url_slug = fields.Char(string='Address (slug)', index=True, readonly=True, copy=False)
+    company_id = fields.Many2one('llmd.company', string='Company record', compute='_compute_company_id', store=True, index=True, ondelete='set null')
+    salary_band = fields.Selection([(k, l) for k, l, _c, _lo, _hi in F.SALARY_BANDS], string='Salary band', compute='_compute_salary_band', store=True, index=True,
+                                   help='The band of the lowest stated salary, in the currency the job states (no conversion). Empty = no salary that can be read for sure.')
+    company_size = fields.Selection(C.COMPANY_SIZES, string='Company size (approx.)', compute='_compute_company_size', store=True, index=True,
+                                    help='Approximate employee count of the company (board_config.COMPANY_SIZE): no job source gives it. Empty = not known.')
     years_text = fields.Char(string='Experience', compute='_compute_backend_links')
-    country = fields.Char(compute='_compute_country', store=True, index=True)
+    # shown only ("Not specified" when the job states none): the stored job_type / exp_level stay empty, so the website filters are unchanged
+    job_type_label = fields.Char(string='Job Type', compute='_compute_backend_links')
+    exp_level_label = fields.Char(string='Experience Level', compute='_compute_backend_links')
+    country = fields.Char(compute='_compute_country', store=True, index=True, readonly=False)
     # "Explore jobs by region": the world region of the country the location names, and inside India the region of its city / state (job_facets.REGIONS / INDIA_ZONES);
     # empty when the location does not say (nothing is guessed)
     region = fields.Char(string='Region code', compute='_compute_region', store=True, index=True)
@@ -165,7 +195,44 @@ class LlmdJobListing(models.Model):
     summary_json = fields.Text(string='Summary (JSON)', compute='_compute_summary', store=True,
                                help='The short summary of the detail page (overview, responsibilities, skills & qualifications, experience level, salary), made from the job text when the job is fetched or updated.')
 
+    manual_fields = fields.Char(string='Edited by hand', readonly=True, copy=False,
+                                help='The fields changed by hand in the backend: every later sync keeps them (Reset to source values gives them back to the sync).')
+
     _source_ext_uniq = models.Constraint('unique(source, ext_id)', 'This source job is already stored.')
+
+    def write(self, vals):
+        """A change made by hand (not by the sync, context llmd_sync) is remembered in manual_fields, so that the next sync does not overwrite it."""
+        edited = [f for f in EDITABLE_FIELDS if f in vals] if not self.env.context.get('llmd_sync') else []
+        res = super().write(vals)
+        if edited:
+            for manual, recs in self.grouped(lambda r: r.manual_fields or '').items():
+                names = [f for f in manual.strip(',').split(',') if f]
+                names += [f for f in edited if f not in names]
+                super(LlmdJobListing, recs).write({'manual_fields': ',%s,' % ','.join(names)})
+        return res
+
+    def manual_names(self):
+        """The fields of this job changed by hand."""
+        self.ensure_one()
+        return [f for f in (self.manual_fields or '').strip(',').split(',') if f]
+
+    def action_reset_manual(self):
+        """Forget the changes made by hand: the next sync writes the source's values again."""
+        super().write({'manual_fields': False})
+        return True
+
+    @api.constrains('work_mode', 'job_type', 'exp_level', 'apply_url', 'source_url', 'title')
+    def _check_manual_values(self):
+        """A value typed by hand must be one the website filters and Apply Now understand."""
+        for rec in self:
+            for name, allowed in (('work_mode', F.MODE_LABELS), ('job_type', F.TYPE_LABELS), ('exp_level', F.EXP_LABELS)):
+                if rec[name] and rec[name] not in allowed:
+                    raise ValidationError('%s must be one of: %s (or empty).' % (rec._fields[name].string, ', '.join(allowed)))
+            for name in ('apply_url', 'source_url'):
+                if rec[name] and not valid_url(rec[name]):
+                    raise ValidationError('%s must be a full http(s) link, e.g. https://careers.example.com/job/123.' % rec._fields[name].string)
+            if not (rec.title or '').strip():
+                raise ValidationError('A job needs a title.')
 
     @api.depends('title', 'location', 'countries', 'employment_type', 'seniority', 'description_html')
     def _compute_facets(self):
@@ -187,10 +254,69 @@ class LlmdJobListing(models.Model):
             rec.category_label = C.CATEGORY_LABELS.get(rec.job_category or '') or False
             rec.function_label = C.FUNCTION_LABELS.get(rec.job_function or '') or False
 
+    @api.depends('salary')
+    def _compute_salary_band(self):
+        for rec in self:
+            rec.salary_band = F.salary_band(rec.salary) or False
+
+    @api.depends('company')
+    def _compute_company_id(self):
+        companies = self.env['llmd.company'].ensure(set(self.mapped('company')))
+        for rec in self:
+            rec.company_id = companies.get(rec.company) or False
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records.assign_slugs()
+        return records
+
+    @api.model
+    def reserved_slugs(self):
+        """The addresses /jobs/<slug> that are no job: the board's own pages, the regions, Remote and every country and city with jobs."""
+        rows = self.sudo()._read_group([('active', '=', True)], ['country', 'city'], ['__count'])
+        places = {C.slugify(v) for row in rows for v in row[:2] if v}
+        return places | set(C.RESERVED_JOB_SLUGS) | {slug for slug, *_x in F.REGIONS + F.INDIA_ZONES}
+
+    def slug_base(self):
+        """The readable part of the address: the title, then the place ("senior-network-engineer-san-francisco")."""
+        self.ensure_one()
+        title = C.slugify(self.title)[:70].strip('-')
+        first = re.sub(r'^\s*remote\s*[·:-]?\s*', '', (self.location or '').split(',')[0], flags=re.I)      # "Remote · US - San Francisco" -> "US - San Francisco"
+        first = re.sub(r'^[A-Z]{2}\s*-\s*', '', first)                                                        # "US - San Francisco" -> "San Francisco"
+        place = C.slugify(self.city or first)[:30].strip('-')
+        if place and ('-%s-' % place) not in ('-%s-' % title):
+            title = '%s-%s' % (title, place) if title else place
+        return title.strip('-') or 'job'
+
+    def assign_slugs(self):
+        """Give every job without one its address, once: the base when it is free, else the base + "-j<ID>" (never "-<number>", Odoo's own job addresses)."""
+        todo = self.filtered(lambda r: not r.url_slug)
+        if not todo:
+            return
+        reserved = self.reserved_slugs()
+        look = U.Lookup(self.env)
+        bases = {rec.id: rec.slug_base() for rec in todo}
+        self.env.cr.execute('SELECT url_slug FROM llmd_job_listing WHERE url_slug = ANY(%s)', [list(set(bases.values()))])
+        taken = {r[0] for r in self.env.cr.fetchall()}
+        for rec in todo.sorted('id'):
+            base = bases[rec.id]
+            slug = CO.unique_slug(base, taken, rec.id, reserved | {b for b in [base] if CO.SLUG_END_NUMBER.search(b) or U.is_reserved_job_slug(b, look)}, suffix='-j%d')
+            taken.add(slug)
+            rec.url_slug = slug
+
+    @api.depends('company')
+    def _compute_company_size(self):
+        for rec in self:
+            rec.company_size = C.company_size(rec.company) or False
+
+    @api.depends('url_slug', 'job_type', 'exp_level', 'exp_years_known', 'exp_years_min', 'exp_years_max')
     def _compute_backend_links(self):
         for rec in self:
-            rec.page_url = '/jobs/ext/%d' % rec.id if rec.id else False
-            rec.years_text = rec.years_label() if rec.id else False
+            rec.page_url = rec.website_path() if rec.id else False
+            rec.years_text = (rec.years_label() if rec.id else '') or 'Not specified'
+            rec.job_type_label = F.TYPE_LABELS.get(rec.job_type or '') or 'Not specified'
+            rec.exp_level_label = F.EXP_LABELS.get(rec.exp_level or '') or 'Not specified'
 
     @api.depends('location', 'india')
     def _compute_country(self):
@@ -371,6 +497,11 @@ class LlmdJobListing(models.Model):
         self.ensure_one()
         return bool(self.posted) and self.posted >= fields.Datetime.now() - timedelta(days=3)
 
+    def tag_href(self, kind, links=None):
+        """The filter link of one card tag (kind: mode, type, exp, years, location, region, posted, company), '' when the job has no such value."""
+        links = links if links is not None else self.filter_links()
+        return links.get({'type': 'jtype', 'exp': 'level'}.get(kind, kind)) or ''
+
     def facet_tags(self):
         """[(kind, label)] of the job card tags: job type, experience level, work mode - only what the job really says."""
         self.ensure_one()
@@ -405,12 +536,65 @@ class LlmdJobListing(models.Model):
         """(url, label) of the job's category page, or ('', '')."""
         self.ensure_one()
         label = C.CATEGORY_LABELS.get(self.job_category or '')
-        return ('/jobs/category/%s' % self.job_category, label) if label else ('', '')
+        return ('/categories/%s' % self.job_category, label) if label else ('', '')
+
+    def website_path(self):
+        """The address of this job's page: /jobs/<url_slug> - unique (assign_slugs: the record ID is added on a clash), so it always finds THIS job; the older
+        /jobs/<id>/<title> and /jobs/ext/<id> move here."""
+        self.ensure_one()
+        if not self.url_slug:
+            self.sudo().assign_slugs()
+        return '/jobs/%s' % self.url_slug
+
+    def filter_links(self):
+        """The Jobs Explorer filter of every fact the detail page shows, built from the job's own values; a fact the job does not have gives no link.
+        {'labels': [(label, href)], 'mode', 'location', 'region', 'salary', 'type_chips': [(label, href)], 'jtype', 'level', 'years', 'posted', 'company',
+        'department': (label, href)}. Used by the detail page and by every job card (a card tag of kind mode / type / exp links to mode / jtype / level)."""
+        self.ensure_one()
+        codes = [c for c in (self.tags or '').split(',') if c in C.TRACK_LABELS][:3]
+        out = {'labels': [(C.TRACK_LABELS[c], '/jobs/track-%s' % c) for c in codes]}
+        # one value = its own clean page (urls.py); 'q' keeps the same filter as a query, which a tag on a results page ADDS to the filters already chosen (llmd_jobs.js)
+        fq = {}
+        out['mode'] = U.mode_path(self.work_mode)
+        fq['mode'] = urlencode({'mode': self.work_mode}) if out['mode'] else ''
+        place = self.city or self.country
+        out['location'] = U.location_path(place) if place else ''
+        fq['location'] = urlencode({'city': self.city} if self.city else {'country': self.country}) if out['location'] else ''
+        out['region'] = U.region_path(self.region)
+        fq['region'] = urlencode({'region': self.region}) if self.region else ''
+        out['salary'] = '/jobs/%s' % U.SALARY_PARTS[self.salary_band] if self.salary_band in U.SALARY_PARTS else ''
+        out['salary_band'] = F.SALARY_BAND_LABELS.get(self.salary_band or '', '')
+        out['jtype'] = U.type_path(self.job_type)
+        fq['jtype'] = urlencode({'jtype': self.job_type}) if out['jtype'] else ''
+        out['level'] = U.level_path(self.exp_level) if self.exp_level in dict(F.EXP_FILTER) else ''
+        fq['level'] = urlencode({'level': self.exp_level}) if out['level'] else ''
+        chips = []
+        if out['jtype']:
+            chips.append((F.TYPE_LABELS[self.job_type], out['jtype']))
+        if out['level']:
+            chips.append((F.EXP_LABELS.get(self.exp_level, self.exp_level), out['level']))
+        out['type_chips'] = chips
+        out['company'] = self.company_link()
+        if self.exp_years_known:
+            out['years'] = U.years_path(self.exp_years_min, self.exp_years_max)
+            fq['years'] = urlencode(dict({'exp_min': self.exp_years_min}, **({'exp_max': self.exp_years_max} if self.exp_years_max < U.EXP_MAX else {})))
+        else:
+            out['years'] = ''
+        out['posted'] = ''
+        if self.posted:
+            days = (fields.Datetime.now() - self.posted).total_seconds() / 86400
+            key = next((k for k, d in (('1', 1), ('7', 7), ('30', 30)) if days <= d), '')
+            out['posted'] = '/jobs/%s' % U.POSTED_SLUGS[key] if key else ''
+            fq['posted'] = urlencode({'posted': key}) if key else ''
+        out['department'] = (C.FUNCTION_LABELS[self.job_function], '/departments/%s' % self.job_function) if self.job_function in C.FUNCTION_LABELS else ('', '')
+        fq['type'], fq['exp'] = fq['jtype'], fq['level']                   # the card tag kinds (tag_href)
+        out['q'] = fq
+        return out
 
     def company_link(self):
-        """The page of the job's company (/jobs/company/<slug>), or ''."""
+        """The page of the job's company (/companies/<slug>), or ''."""
         self.ensure_one()
-        return '/jobs/company/%s' % C.slugify(self.company) if self.company and C.slugify(self.company) else ''
+        return self.company_id.website_path() if self.company_id else ''
 
     def facet_labels(self):
         """The small tags of a job card: job type, experience level, work mode (only what the job really says)."""
@@ -466,11 +650,20 @@ class LlmdJobListing(models.Model):
             'overview': block['overview'], 'points': block['points'], 'point_groups': block['point_groups'], 'skills': block['skills'], 'facts': block['facts'], 'from_text': sm['from_text'],
             'notice': '' if self.full_text else 'Only a short summary of this job is available here. The complete description is on the employer\'s application page.',
             'apply_url': apply_url, 'internal_href': '', 'apply_form_href': ('/jobs/ext/%d/apply' % self.id) if self.apply_mode() == 'form' else '', 'go_href': ('/jobs/ext/%d/go' % self.id) if apply_url else '',
-            'source_text': '', 'track': self.card_track()[0],
+            'source_text': '', 'track': self.card_track()[0], **self._sign_in_vals(bool(apply_url) or self.apply_mode() == 'form'),
             'category_href': self.category_link()[0], 'category_label': self.category_link()[1],
             'company_href': self.company_link(), 'years': self.years_label(),
+            'links': self.filter_links(),
             'region': self.region_label or '', 'languages': self.language_tags(), 'title_lang': self.title_lang(), 'source_lang': self.source_lang or '', 'company_hq': self.company_hq or '',
         }
+
+    @api.model
+    def _sign_in_vals(self, can_apply):
+        """For the Apply card: `sign_in` = Apply Now first asks the visitor to sign in (they are not signed in), `tracked_user` = they are signed in and their account is
+        saved with the click."""
+        login = can_apply and apply_login_required(self.env)
+        public = self.env.user._is_public()
+        return {'sign_in': bool(login and public), 'tracked_user': bool(login and not public)}
 
     @api.model
     def apply_mode(self):
@@ -574,6 +767,7 @@ class LlmdJobListing(models.Model):
         if not cr.fetchone()[0]:
             _logger.warning('job sync (%s): skipped, another sync is already running', trigger)
             return {'skipped': 'another sync is already running', 'created': 0, 'updated': 0, 'hidden': 0, 'errors': 0, 'duplicates_removed': 0, 'per_source': {}, 'total_visible': self.search_count([('active', '=', True)])}
+        self = self.with_context(llmd_sync=True)                            # the sync's own writes are never "changed by hand"
         started = fields.Datetime.now()
         Source = self.env['llmd.job.source']
         sources = Source._ensure_sources()
@@ -629,7 +823,15 @@ class LlmdJobListing(models.Model):
             try:
                 with cr.savepoint():
                     if key in existing:
-                        existing[key].write(vals)
+                        rec = existing[key]
+                        manual = rec.manual_names()
+                        if manual:                                          # changed by hand: those fields keep the hand-made value
+                            kept_facets = {f: rec[f] for f in FACET_FIELDS if f in manual}
+                            rec.write({k: v for k, v in vals.items() if k not in manual})
+                            if kept_facets:                                 # a new description must not work out the hand-set facets again
+                                rec.write(kept_facets)
+                        else:
+                            rec.write(vals)
                         updated += 1
                     else:
                         existing[key] = self.create(vals)

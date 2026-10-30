@@ -60,32 +60,36 @@
         <field name="name">llmd.job.listing.list</field>
         <field name="model">llmd.job.listing</field>
         <field name="arch" type="xml">
-            <list create="0" edit="0">
-                <field name="source"/>
-                <field name="posted_type" optional="show"/>
+            <!-- editable for Recruitment managers / admins (ir.model.access.csv); select several rows to change them together. Changed fields are kept by the sync (manual_fields) -->
+            <list create="0" delete="0" multi_edit="1">
+                <field name="source" readonly="1"/>
+                <field name="posted_type" optional="show" readonly="1"/>
                 <field name="title"/>
                 <field name="company"/>
-                <field name="category_label" optional="show"/>
+                <field name="category_label" optional="show" readonly="1"/>
                 <field name="location"/>
                 <field name="country" optional="hide"/>
-                <field name="region_label" optional="show"/>
-                <field name="india_zone_label" optional="hide"/>
-                <field name="company_hq" optional="hide"/>
-                <field name="company_region_label" optional="hide"/>
+                <field name="region_label" optional="show" readonly="1"/>
+                <field name="india_zone_label" optional="hide" readonly="1"/>
+                <field name="company_hq" optional="hide" readonly="1"/>
+                <field name="company_region_label" optional="hide" readonly="1"/>
                 <field name="india" optional="hide"/>
                 <field name="work_mode" optional="show"/>
-                <field name="job_type" optional="show"/>
+                <field name="job_type_label" optional="show"/>
                 <field name="years_text" optional="show"/>
-                <field name="skill_ids" widget="many2many_tags" optional="hide"/>
-                <field name="exp_level" optional="hide"/>
-                <field name="function_label" optional="hide"/>
+                <field name="exp_level_label" optional="show"/>
+                <field name="job_type" string="Job type (code)" optional="hide"/>
+                <field name="skill_ids" widget="many2many_tags" optional="hide" readonly="1"/>
+                <field name="exp_level" string="Experience level (code)" optional="hide"/>
+                <field name="function_label" optional="hide" readonly="1"/>
                 <field name="city" optional="hide"/>
-                <field name="courses" optional="hide"/>
-                <field name="roles" optional="hide"/>
+                <field name="courses" optional="hide" readonly="1"/>
+                <field name="roles" optional="hide" readonly="1"/>
                 <field name="posted"/>
                 <field name="apply_url" widget="url"/>
-                <field name="page_url" widget="url" optional="show"/>
-                <field name="also_on" optional="hide"/>
+                <field name="page_url" widget="url" optional="show" readonly="1"/>
+                <field name="also_on" optional="hide" readonly="1"/>
+                <field name="manual_fields" optional="hide"/>
                 <field name="active" column_invisible="1"/>
             </list>
         </field>
@@ -95,52 +99,66 @@
         <field name="name">llmd.job.listing.form</field>
         <field name="model">llmd.job.listing</field>
         <field name="arch" type="xml">
-            <form create="0" edit="0">
+            <form create="0" delete="0">
+                <header>
+                    <button name="action_reset_manual" type="object" string="Reset to source values" invisible="not manual_fields"
+                            groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"
+                            help="Forget the changes made by hand: the next sync writes the source's values again."/>
+                </header>
                 <sheet>
+                    <div class="alert alert-info" role="status" invisible="not manual_fields">
+                        Changed by hand (kept by every sync): <field name="manual_fields" class="oe_inline"/>
+                    </div>
                     <group>
-                        <group>
+                        <group string="Job (editable)">
                             <field name="title"/>
                             <field name="company"/>
                             <field name="location"/>
                             <field name="countries"/>
-                            <field name="employment_type"/>
-                            <field name="seniority"/>
+                            <field name="country"/>
                             <field name="india"/>
                             <field name="city"/>
-                            <field name="job_type"/>
-                            <field name="exp_level"/>
-                            <field name="work_mode"/>
-                            <field name="category_label"/>
-                            <field name="function_label"/>
-                            <field name="country"/>
-                            <field name="region_label"/>
-                            <field name="india_zone_label"/>
-                            <field name="company_hq"/>
-                            <field name="company_region_label"/>
-                            <field name="years_text"/>
-                            <field name="skill_keys"/>
-                            <field name="short_description"/>
-                        </group>
-                        <group string="Skills in Odoo (from this job's own text)">
-                            <field name="technical_skill_ids" widget="many2many_tags"/>
-                            <field name="language_skill_ids" widget="many2many_tags"/>
-                            <field name="soft_skill_ids" widget="many2many_tags"/>
-                        </group>
-                        <group>
-                            <field name="source"/>
-                            <field name="ext_id"/>
-                            <field name="via"/>
-                            <field name="also_on"/>
-                            <field name="full_text"/>
-                            <field name="courses"/>
-                            <field name="roles"/>
-                            <field name="tags"/>
+                            <field name="employment_type"/>
+                            <field name="seniority"/>
+                            <field name="job_type" placeholder="fulltime / parttime / internship / contract"/>
+                            <field name="exp_level" placeholder="fresher / internship / entry / mid / senior"/>
+                            <field name="work_mode" placeholder="remote / hybrid / onsite"/>
+                            <field name="salary"/>
                             <field name="posted"/>
                             <field name="apply_url" widget="url"/>
-                            <field name="page_url" widget="url"/>
-                            <field name="fetched_at"/>
+                            <field name="source_url" widget="url"/>
+                            <field name="short_description"/>
+                            <field name="active" widget="boolean_toggle" string="Shown on website"/>
+                        </group>
+                        <group string="Worked out from the job (read-only)">
+                            <field name="category_label" readonly="1"/>
+                            <field name="function_label" readonly="1"/>
+                            <field name="region_label" readonly="1"/>
+                            <field name="india_zone_label" readonly="1"/>
+                            <field name="company_hq" readonly="1"/>
+                            <field name="company_region_label" readonly="1"/>
+                            <field name="job_type_label"/>
+                            <field name="exp_level_label"/>
+                            <field name="years_text"/>
+                            <field name="skill_keys" readonly="1"/>
+                            <field name="technical_skill_ids" widget="many2many_tags" readonly="1"/>
+                            <field name="language_skill_ids" widget="many2many_tags" readonly="1"/>
+                            <field name="soft_skill_ids" widget="many2many_tags" readonly="1"/>
+                        </group>
+                        <group string="Source (read-only)">
+                            <field name="source" readonly="1"/>
+                            <field name="ext_id" readonly="1"/>
+                            <field name="via" readonly="1"/>
+                            <field name="also_on" readonly="1"/>
+                            <field name="full_text" readonly="1"/>
+                            <field name="courses" readonly="1"/>
+                            <field name="roles" readonly="1"/>
+                            <field name="tags" readonly="1"/>
+                            <field name="page_url" widget="url" readonly="1"/>
+                            <field name="fetched_at" readonly="1"/>
                         </group>
                     </group>
+                    <separator string="Description"/>
                     <field name="description_html"/>
                 </sheet>
             </form>

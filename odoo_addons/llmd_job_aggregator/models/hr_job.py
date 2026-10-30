@@ -97,7 +97,7 @@ class HrJob(models.Model):
             'overview': block['overview'] if data else '', 'points': block['points'], 'point_groups': block['point_groups'], 'skills': block['skills'], 'facts': block['facts'], 'from_text': sm['from_text'],
             'notice': '', 'apply_url': apply_url, 'go_href': ('/jobs/position/%d/go' % self.id) if apply_url else '',
             'internal_href': ('/jobs/apply/%s' % self.env['ir.http']._slug(self)) if (internal and not apply_url) else '',
-            'source_text': '', 'source': source, 'internal_apply': internal,
+            'source_text': '', 'source': source, 'internal_apply': internal, **self.env['llmd.job.listing']._sign_in_vals(bool(apply_url)),
         }
 
     # ------------------------------------------------------------------ keys (never stored in code: environment or system parameters)

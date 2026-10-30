@@ -118,6 +118,119 @@ POSTED_TYPES = [('fetched', 'Fetched'), ('public_user', 'Public User')]
 APPLICATION_TYPES = [('website_form', 'Website Form'), ('external_apply_click', 'External Apply Click')]
 
 
+# Company size: NO job source gives it, so these are APPROXIMATE employee counts of the whole company (group / parent for a subsidiary), from public information
+# as known in 2025-2026 - estimates set on the owner's request, not verified data. A company that is not listed (or not sure, like Everpure) gets no size: it is
+# simply not counted in the Company size filter. Correct a value here and run the module update: every job of that company follows.
+COMPANY_SIZES = [('1-50', '1–50 employees'), ('51-200', '51–200 employees'), ('201-1000', '201–1,000 employees'), ('1001-5000', '1,001–5,000 employees'),
+                 ('5001+', '5,000+ employees')]
+COMPANY_SIZE_LABELS = dict(COMPANY_SIZES)
+COMPANY_SIZE = {
+    # 5001+
+    'Bosch Group': '5001+',
+    'AbbVie': '5001+',
+    'ServiceNow': '5001+',
+    'Databricks': '5001+',
+    'Zscaler': '5001+',
+    'Okta': '5001+',
+    'MongoDB': '5001+',
+    'Stripe': '5001+',
+    'Toast': '5001+',
+    'Paytm': '5001+',
+    'NielsenIQ': '5001+',
+    'Experian': '5001+',
+    'Datadog': '5001+',
+    'Binance': '5001+',
+    'Agoda': '5001+',
+    'Swiggy': '5001+',
+    'Airbnb': '5001+',
+    'Twilio': '5001+',
+    'Continental': '5001+',
+    'Western Digital': '5001+',
+    'Spotify': '5001+',
+    'NetEase Games': '5001+',
+    'Baidu USA': '5001+',
+    'HoYoverse': '5001+',
+    'XPENG': '5001+',
+    'SHEIN': '5001+',
+    'BYD North America': '5001+',
+    'ByteDance': '5001+',
+    # 1001-5000
+    'Elastic': '1001-5000',
+    'OpenAI': '1001-5000',
+    'GitLab': '1001-5000',
+    'Rubrik': '1001-5000',
+    'Fivetran': '1001-5000',
+    'Samsara': '1001-5000',
+    'Anthropic': '1001-5000',
+    'Zeta Global': '1001-5000',
+    'Coinbase': '1001-5000',
+    'Netskope': '1001-5000',
+    'Adyen': '1001-5000',
+    'Figma': '1001-5000',
+    'Cloudflare': '1001-5000',
+    'Airwallex': '1001-5000',
+    'Freshworks': '1001-5000',
+    'InMobi': '1001-5000',
+    'Crypto.com': '1001-5000',
+    'Grafana Labs': '1001-5000',
+    'JFrog': '1001-5000',
+    'OKX': '1001-5000',
+    'Bybit': '1001-5000',
+    'Lalamove': '1001-5000',
+    'Meesho': '1001-5000',
+    'New Relic': '1001-5000',
+    'Sigmoid': '1001-5000',
+    'Turing': '1001-5000',
+    'Zeta': '1001-5000',
+    'Druva': '1001-5000',
+    'Coursera': '1001-5000',
+    'Razorpay Software Private Limited': '1001-5000',
+    'WeRide': '1001-5000',
+    'Pocket FM': '1001-5000',
+    'Groww': '1001-5000',
+    'Unacademy': '1001-5000',
+    # 201-1000
+    'Harvey': '201-1000',
+    'ElevenLabs': '201-1000',
+    'ClickHouse': '201-1000',
+    'Glean': '201-1000',
+    'Cognition': '201-1000',
+    'Notion': '201-1000',
+    'Cursor': '201-1000',
+    'Scale AI': '201-1000',
+    'Temporal': '201-1000',
+    'Hevo Data': '201-1000',
+    'Writer': '201-1000',
+    'Mixpanel': '201-1000',
+    'HackerRank': '201-1000',
+    'Mindtickle': '201-1000',
+    'Outreach': '201-1000',
+    'Nium': '201-1000',
+    'Cockroach Labs': '201-1000',
+    'SpotDraft': '201-1000',
+    'YugabyteDB': '201-1000',
+    'Sumo Logic': '201-1000',
+    'Atlan': '201-1000',
+    'CRED': '201-1000',
+    'Observe.AI': '201-1000',
+    'TiDB': '201-1000',
+    # 51-200
+    'Sarvam AI': '51-200',
+    'Netomi': '51-200',
+    'FamPay': '51-200',
+    'StarTree': '51-200',
+    # 1-50
+    'Composio': '1-50',
+    'SigNoz': '1-50',
+    'Smallest.ai': '1-50',
+}
+
+
+def company_size(company):
+    """The approximate size band of a company (COMPANY_SIZE), or '' when it is not known."""
+    return COMPANY_SIZE.get((company or '').strip(), '')
+
+
 def company_hq(company):
     """The country of a company's headquarters (COMPANY_HQ), or '' when it is not verified."""
     return _HQ_OF.get((company or '').strip().lower(), '')
@@ -134,6 +247,9 @@ REQUEST_BUDGET = {'jooble': (450, 'total'), 'jsearch': (150, 'month')}
 # THEIR OWN page, so they are not asked and their jobs are hidden (never deleted). System parameter llmd_agg.direct_links_only = 0 brings them back.
 DIRECT_LINKS_ONLY = True
 BOARD_LINK_SOURCES = ('adzuna', 'jooble', 'himalayas')
+# Sign in before Apply Now (default): a visitor who is not signed in goes to the login / sign-up page first and comes back to the same Apply Now afterwards; the click is
+# then saved with the name, e-mail and user ID of THAT account (Apply Clicks). System parameter llmd_agg.apply_login = 0 = anonymous clicks as before.
+APPLY_LOGIN = True
 KEEP_DAYS = 30                                   # a job that no source has returned for this long is hidden (only checked when a source did return jobs); longer than the rotation of the small plans
 
 OLD_TRACK_PARAMS = set(TRACK_LABELS)       # old links used ?course=genai for the chips
@@ -192,6 +308,11 @@ def course_words(text):
 def slugify(text):
     """The URL part of a company, a city or a country: lower case, words joined by '-' ("Hevo Data" -> hevo-data)."""
     return re.sub(r'[^a-z0-9]+', '-', (text or '').lower()).strip('-')
+
+
+# /jobs/<word> addresses that are pages of the board, never a job (a job whose address would be one of them gets its ID added)
+RESERVED_JOB_SLUGS = ('all', 'page', 'latest', 'regions', 'countries', 'categories', 'results-count', 'course-matches', 'auth', 'ext', 'position', 'apply', 'add',
+                      'detail', 'company', 'category', 'location', 'region', 'role', 'course', 'remote', 'delhi-ncr', 'job', 'latest-jobs', 'course-match', 'faq', 'companies-by-region')
 
 
 def norm_key(title, company, location):

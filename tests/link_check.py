@@ -48,11 +48,26 @@ def check(name, ok, detail=''):
     print('  [%s] %s%s' % ('PASS' if ok else 'FAIL', name, (' - ' + str(detail)) if detail else ''))
 
 
-def get(path, follow=True):
+def signed_in_opener():
+    """An opener with the session of the local test account (scripts/local_test_user.py), redirects not followed - or None without its login in .env.
+    It keeps this checker's User-Agent, so its Apply Now visits are still not saved (no click line, no Job Applications record)."""
+    import http.cookiejar
+    import json
+    import os
+    if not (os.environ.get('LLMD_TEST_USER_LOGIN') and os.environ.get('LLMD_TEST_USER_PASSWORD')):
+        return None
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), _NoRedirect())
+    body = json.dumps({'jsonrpc': '2.0', 'method': 'call', 'params': {'db': os.environ['ODOO_DB'], 'login': os.environ['LLMD_TEST_USER_LOGIN'],
+                                                                      'password': os.environ['LLMD_TEST_USER_PASSWORD']}}).encode()
+    answer = opener.open(urllib.request.Request(gw.site_url() + '/web/session/authenticate', body, dict(UA, **{'Content-Type': 'application/json'})), timeout=60)
+    return opener if (json.loads(answer.read().decode()).get('result') or {}).get('uid') else None
+
+
+def get(path, follow=True, opener=None):
     """(status, body, location) of a local page."""
     req = urllib.request.Request(gw.site_url() + path, headers=UA)
     try:
-        r = (urllib.request.urlopen if follow else NO_REDIRECT.open)(req, timeout=60)
+        r = opener.open(req, timeout=60) if opener else (urllib.request.urlopen if follow else NO_REDIRECT.open)(req, timeout=60)
         return r.status, r.read().decode('utf-8', 'replace'), ''
     except urllib.error.HTTPError as exc:
         return exc.code, '', exc.headers.get('Location', '')
@@ -114,8 +129,9 @@ def main():
 
     print('\n=== 2. every visible job: View Details and Apply Now ===')
     ids = [r['id'] for r in rows]
+    by_page = {r['id']: r['page_url'] for r in rows}
     with ThreadPoolExecutor(max_workers=6) as pool:
-        details = list(pool.map(lambda i: get('/jobs/ext/%d' % i), ids))
+        details = list(pool.map(lambda i: get(by_page[i]), ids))                  # the job's own page /jobs/<id>/<slug> (Odoo's page_url)
     no_detail = [i for i, (st, _b, _l) in zip(ids, details) if st != 200]
     applies = {}
     for i, (st, body, _l) in zip(ids, details):
@@ -125,8 +141,17 @@ def main():
     by_id = {r['id']: r for r in rows}
     with ThreadPoolExecutor(max_workers=6) as pool:
         gos = list(pool.map(lambda i: get('/jobs/ext/%d/go' % i, follow=False), ids))
-    wrong = [(i, st, loc[:60]) for i, (st, _b, loc) in zip(ids, gos) if not (st == 303 and loc == by_id[i]['apply_url'])]
-    check('Apply Now: all %d jobs redirect (303) to the application URL stored in Odoo' % len(ids), not wrong, wrong[:5])
+    login_of = lambda i: '/web/login?' + urllib.parse.urlencode({'redirect': '/jobs/ext/%d/go' % i})       # noqa: E731
+    wrong = [(i, st, loc[:60]) for i, (st, _b, loc) in zip(ids, gos) if not (st == 303 and loc.endswith(login_of(i)))]
+    check('Apply Now, not signed in: all %d jobs send to the login page, back to their own Apply Now afterwards' % len(ids), not wrong, wrong[:5])
+    signed = signed_in_opener()
+    if signed:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            gos = list(pool.map(lambda i: get('/jobs/ext/%d/go' % i, follow=False, opener=signed), ids))
+        wrong = [(i, st, loc[:60]) for i, (st, _b, loc) in zip(ids, gos) if not (st == 303 and loc == by_id[i]['apply_url'])]
+        check('Apply Now, signed in (local test account): all %d jobs redirect (303) to the application URL stored in Odoo' % len(ids), not wrong, wrong[:5])
+    else:
+        print('  (LLMD_TEST_USER_LOGIN / _PASSWORD not set: the signed-in Apply Now check is skipped)')
     hosts = Counter(urllib.parse.urlparse(r['apply_url']).hostname for r in rows)
     board_hosts = [h for h in hosts if re.search(r'jooble|adzuna|himalayas|indeed|naukri|linkedin', h or '')]
     check('every application URL is the company\'s own page or its job-board provider (%d hosts), never a job site' % len(hosts), not board_hosts and all(r['apply_url'] for r in rows), board_hosts)

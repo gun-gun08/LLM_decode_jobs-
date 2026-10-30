@@ -37,39 +37,41 @@ for name, url, seq in want:
     else:
         Menu.create(vals)
 
-# the footer: what LLM Decode is, and the same navigation
+# the footer: what LLM Decode is, and the same navigation - the original four Bootstrap columns side by side (4 on a desktop, 2 per row on a tablet, stacked on a phone);
+# the layout needs only Bootstrap, llmd_jobs.css ("the footer") only tunes the spacing
 FOOTER = """<data inherit_id="website.layout" name="Default" active="True">
     <xpath expr="//div[@id='footer']" position="replace">
         <div id="footer" class="oe_structure oe_structure_solo text-break" t-ignore="true" t-if="not no_footer">
-            <section class="s_text_block pt48 pb24" data-snippet="s_text_block" data-name="Container">
+            <section class="s_text_block o_llmd_footer" data-snippet="s_text_block" data-name="Container">
                 <div class="container">
-                    <div class="row">
-                        <div class="col-lg-5 pb24">
+                    <div class="row g-4">
+                        <div class="col-12 col-md-6 col-lg-4">
                             <h5>LLM Decode</h5>
-                            <p>Practical AI courses for builders and sellers - and Jobs Explorer: real openings, straight from the companies' own job pages, matched to what each course teaches.</p>
+                            <p class="o_llmd_footer_text">Practical AI courses for builders and sellers - and Jobs Explorer: real openings, straight from the companies' own job pages, matched to what each course teaches.</p>
                         </div>
-                        <div class="col-6 col-lg-2 pb24">
+                        <div class="col-12 col-md-6 col-lg-3">
                             <h5>Jobs Explorer</h5>
-                            <ul class="list-unstyled">
+                            <ul class="list-unstyled o_llmd_footer_links">
                                 <li><a href="/jobs">Jobs Explorer</a></li>
-                                <li><a href="/jobs?view=all">Search all jobs</a></li>
-                                <li><a href="/jobs/categories">Categories</a></li>
-                                <li><a href="/jobs/countries">Countries</a></li>
-                                <li><a href="/jobs/regions">Regions</a></li>
+                                <li><a href="/jobs/all">All jobs</a></li>
+                                <li><a href="/companies">Companies</a></li>
+                                <li><a href="/categories">Categories</a></li>
+                                <li><a href="/locations">Locations</a></li>
+                                <li><a href="/regions">Regions</a></li>
                             </ul>
                         </div>
-                        <div class="col-6 col-lg-2 pb24">
+                        <div class="col-12 col-md-6 col-lg-2">
                             <h5>Learn</h5>
-                            <ul class="list-unstyled">
+                            <ul class="list-unstyled o_llmd_footer_links">
                                 <li><a href="%(learn)s/slides" target="_blank" rel="noopener">Courses</a></li>
                                 <li><a href="%(learn)s/library" target="_blank" rel="noopener">Resources</a></li>
                                 <li><a href="%(learn)s/forum" target="_blank" rel="noopener">Forum</a></li>
                             </ul>
                         </div>
-                        <div class="col-lg-3 pb24">
+                        <div class="col-12 col-md-6 col-lg-3">
                             <h5>Help</h5>
-                            <ul class="list-unstyled">
-                                <li><a href="/jobs#faq">Jobs Explorer FAQ</a></li>
+                            <ul class="list-unstyled o_llmd_footer_links">
+                                <li><a href="/jobs/faq">Jobs Explorer FAQ</a></li>
                                 <li><a href="/contactus">Contact us</a></li>
                             </ul>
                         </div>
@@ -82,6 +84,11 @@ FOOTER = """<data inherit_id="website.layout" name="Default" active="True">
 footer = View.search([('key', '=', 'website.footer_custom')], limit=1)
 if footer:
     footer.write({'arch_db': FOOTER})                                                                    # copy-on-write: a copy for this website
+
+# the copyright line: the site's name instead of the demo "Company name"
+copyright_view = View.search([('key', '=', 'website.footer_copyright_company_name')], limit=1)
+if copyright_view and 'Company name' in (copyright_view.arch_db or ''):
+    copyright_view.write({'arch_db': copyright_view.arch_db.replace('Copyright &amp;copy; Company name', 'Copyright &amp;copy; LLM Decode')})   # copy-on-write: this website only
 
 env.cr.commit()                                                                                           # noqa: F821
 print('branding:', website.name, '| menu:', ', '.join(m.name for m in top.child_id.sorted('sequence')))

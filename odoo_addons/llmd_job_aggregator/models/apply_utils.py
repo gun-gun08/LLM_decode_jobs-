@@ -1,7 +1,7 @@
 """Checks for the applicant data an authorized provider integration sends (pure Python, no Odoo imports: unit-tested by rolelib/apply_test.py).
 
 Everything that arrives is untrusted: text is cleaned and limited, the e-mail is validated, and a resume (optional) must be a real PDF / Word file of a sensible size (the file's
-first bytes are checked, not just its name). An application is a name and an e-mail: no phone number is read or kept.
+first bytes are checked, not just its name). An application is a name and an e-mail: no phone number is read or kept (switched off again, 19.0.36).
 """
 import io
 import re

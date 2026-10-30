@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Recruitment > Job Applications: applicants that an authorized provider integration sent to the API, applicants of Odoo's own form of our positions, and the records of the earlier
-         versions. The clicks on "Apply Now" are NOT here (Recruitment > Apply Clicks): a click is not an application. -->
+    <!-- Recruitment > Job Applications: applicants that an authorized provider integration sent to the API, applicants of our form and of Odoo's own form of our positions, the records
+         of the earlier versions - and every signed-in Apply Now ("Redirected to External Site" / "Apply Clicked": name, e-mail, user from the account; NOT submitted until a form
+         or a provider confirms it). The click lines themselves are in Recruitment > Apply Clicks (no name or e-mail there). -->
     <record id="llmd_job_application_list" model="ir.ui.view">
         <field name="name">llmd.job.application.list</field>
         <field name="model">llmd.job.application</field>
         <field name="arch" type="xml">
-            <list string="Job Applications" create="0" decoration-success="state in ('submitted', 'confirmed')" decoration-warning="state == 'reported'" decoration-danger="state == 'withdrawn'" default_order="application_date desc">
+            <list string="Job Applications" create="0" decoration-success="state in ('submitted', 'confirmed')" decoration-info="state in ('clicked', 'redirected')" decoration-warning="state == 'reported'" decoration-danger="state == 'withdrawn'" default_order="activity_date desc">
                 <header>
                     <button name="action_confirm" type="object" string="Confirm"/>
                     <button name="action_withdraw" type="object" string="Withdraw"/>
@@ -17,18 +18,22 @@
                 <field name="job_title"/>
                 <field name="company"/>
                 <field name="department" optional="show"/>
-                <field name="job_type" optional="show"/>
-                <field name="experience_required" optional="show"/>
+                <field name="job_type_label" optional="show"/>
+                <field name="experience_label" optional="show"/>
                 <field name="location" optional="hide"/>
+                <field name="apply_url" widget="url" optional="hide"/>
+                <field name="internal_job_id" optional="show"/>
                 <field name="ext_id"/>
                 <field name="application_type" optional="show"/>
                 <field name="posted_type" optional="show"/>
                 <field name="channel" optional="hide"/>
-                <field name="state" widget="badge" decoration-warning="state == 'reported'" decoration-success="state in ('submitted', 'confirmed')" decoration-danger="state == 'withdrawn'"/>
-                <field name="application_date"/>
+                <field name="state" widget="badge" decoration-info="state in ('clicked', 'redirected')" decoration-warning="state == 'reported'" decoration-success="state in ('submitted', 'confirmed')" decoration-danger="state == 'withdrawn'"/>
+                <field name="clicked_at" optional="show"/>
+                <field name="click_count" optional="hide"/>
+                <field name="activity_date" column_invisible="True"/>
                 <field name="source" optional="hide"/>
                 <field name="provider_ref" optional="hide"/>
-                <field name="resume_count" string="Resumes" optional="hide"/>
+                <field name="resume_count" string="Resumes" optional="show"/>
                 <field name="applicant_id" optional="hide"/>
             </list>
         </field>
@@ -59,28 +64,32 @@
                     </div>
                     <div class="alert alert-warning" role="status" invisible="state != 'reported'">The applicant said they applied on the employer's website (earlier version of this module). We cannot verify that: use "Confirm application" once it is confirmed.</div>
                     <group>
+                        <!-- a field without a value (empty, False, 0, only spaces) is not shown at all: its whole row, label and help included (llmd_blank) -->
+                        <field name="llmd_blank" invisible="1"/>
                         <group string="Applicant">
-                            <field name="applicant_name"/>
-                            <field name="email" widget="email"/>
-                            <field name="application_type"/>
-                            <field name="channel"/>
-                            <field name="application_date"/>
-                            <field name="confirmed_date"/>
-                            <field name="confirmed_via"/>
-                            <field name="provider_ref"/>
+                            <field name="applicant_name" invisible="',applicant_name,' in llmd_blank"/>
+                            <field name="email" widget="email" invisible="',email,' in llmd_blank"/>
+                            <field name="resume_count" string="Resumes" invisible="',resume_count,' in llmd_blank"/>
+                            <field name="application_type" invisible="',application_type,' in llmd_blank"/>
+                            <field name="channel" invisible="',channel,' in llmd_blank"/>
+                            <field name="clicked_at" invisible="',clicked_at,' in llmd_blank"/>
+                            <field name="click_count" invisible="',click_count,' in llmd_blank"/>
+                            <field name="confirmed_date" invisible="',confirmed_date,' in llmd_blank"/>
+                            <field name="confirmed_via" invisible="',confirmed_via,' in llmd_blank"/>
+                            <field name="provider_ref" invisible="',provider_ref,' in llmd_blank"/>
                         </group>
                         <group string="Job">
-                            <field name="job_title"/>
-                            <field name="company"/>
-                            <field name="department"/>
-                            <field name="job_type"/>
-                            <field name="experience_required"/>
-                            <field name="location"/>
-                            <field name="posted_type"/>
-                            <field name="ext_id"/>
-                            <field name="source"/>
-                            <field name="apply_url" widget="url"/>
-                            <field name="resume_count"/>
+                            <field name="job_title" invisible="',job_title,' in llmd_blank"/>
+                            <field name="company" invisible="',company,' in llmd_blank"/>
+                            <field name="department" invisible="',department,' in llmd_blank"/>
+                            <field name="job_type_label"/>
+                            <field name="experience_label"/>
+                            <field name="location" invisible="',location,' in llmd_blank"/>
+                            <field name="posted_type" invisible="',posted_type,' in llmd_blank"/>
+                            <field name="internal_job_id" invisible="',internal_job_id,' in llmd_blank"/>
+                            <field name="ext_id" invisible="',ext_id,' in llmd_blank"/>
+                            <field name="source" invisible="',source,' in llmd_blank"/>
+                            <field name="apply_url" widget="url" placeholder="https://careers.example.com/job/123"/>
                         </group>
                     </group>
                     <group string="Technical" groups="base.group_no_one">
@@ -88,7 +97,7 @@
                         <field name="identity_key"/>
                         <field name="active"/>
                     </group>
-                    <field name="message" placeholder="Note from the provider"/>
+                    <field name="message" placeholder="Note from the provider" invisible="',message,' in llmd_blank"/>
                 </sheet>
                 <chatter/>
             </form>
@@ -106,7 +115,6 @@
                         <field name="applicant_name" class="fw-bold fs-5"/>
                         <field name="job_title" class="d-block"/>
                         <field name="company" class="d-block text-muted"/>
-                        <div class="mt-2 text-muted small"><field name="application_date" widget="date"/></div>
                     </t>
                 </templates>
             </kanban>
@@ -153,6 +161,7 @@
                 <separator/>
                 <filter name="provider" string="Sent by the job provider" domain="[('channel', '=', 'provider')]"/>
                 <filter name="own" string="Our website (Odoo form)" domain="[('channel', '=', 'own')]"/>
+                <filter name="channel_apply_now" string="Apply Now (signed in)" domain="[('channel', '=', 'apply_now')]"/>
                 <filter name="recruiter" string="Added in Odoo / by e-mail" domain="[('channel', '=', 'recruiter')]"/>
                 <separator/>
                 <filter name="with_resume" string="With a resume" domain="[('applicant_id.attachment_ids', '!=', False)]"/>

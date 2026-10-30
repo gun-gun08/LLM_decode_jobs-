@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Recruitment > Apply Clicks: one line for EVERY click on "Apply Now" (time, job, company, source, external job ID, original apply URL, status).
-         A click is only a click: nobody is named here, and it is not an application (see Job Applications for those). -->
+         No name or e-mail here: the signed-in person is kept in Job Applications (status "Redirected to External Site"). A click is only a click: it is never an application. -->
     <record id="llmd_job_click_list" model="ir.ui.view">
         <field name="name">llmd.job.click.list</field>
         <field name="model">llmd.job.click</field>
         <field name="arch" type="xml">
-            <list string="Apply Clicks" create="0" edit="0" decoration-muted="status == 'no_link'" default_order="clicked_at desc">
+            <list string="Apply Clicks" create="0" multi_edit="1" decoration-muted="status == 'no_link'" default_order="clicked_at desc">
                 <field name="clicked_at"/>
                 <field name="job_title"/>
                 <field name="company"/>
@@ -26,12 +26,11 @@
         <field name="name">llmd.job.click.form</field>
         <field name="model">llmd.job.click</field>
         <field name="arch" type="xml">
-            <form string="Apply click" create="0" edit="0">
+            <form string="Apply click" create="0">
                 <header>
                     <field name="status" widget="statusbar"/>
                 </header>
                 <sheet>
-                    <div class="alert alert-info" role="status" invisible="status != 'clicked'">Somebody clicked Apply Now and was sent to the employer's website. We do not know whether they applied there, and we do not know who they are: this is not an application.</div>
                     <div class="alert alert-warning" role="status" invisible="status != 'no_link'">Somebody clicked Apply Now, but this job has no valid application link, so nobody was sent anywhere.</div>
                     <group>
                         <group string="Click">
@@ -53,6 +52,7 @@
                         <group string="Technical" groups="base.group_no_one">
                             <field name="job_key"/>
                             <field name="visitor_key"/>
+                            <field name="user_id"/>
                         </group>
                     </group>
                 </sheet>
@@ -98,6 +98,9 @@
                 <filter name="sent" string="Sent to the employer" domain="[('status', '=', 'clicked')]"/>
                 <filter name="no_link" string="No application link" domain="[('status', '=', 'no_link')]"/>
                 <separator/>
+                <filter name="signed_in" string="Signed-in users" domain="[('user_id', '!=', False)]"/>
+                <filter name="anonymous" string="Not signed in" domain="[('user_id', '=', False)]"/>
+                <separator/>
                 <filter name="first" string="First clicks only" domain="[('repeat', '=', False)]"/>
                 <filter name="repeat" string="Repeat clicks" domain="[('repeat', '=', True)]"/>
                 <group>
@@ -117,7 +120,7 @@
         <field name="view_mode">list,pivot,graph,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No click yet</p>
-            <p>Every click on "Apply Now" of a job is saved here before the visitor is sent to the employer's website.</p>
+            <p>Every click on "Apply Now" of a job is saved here before the visitor is sent to the employer's website. The signed-in person is in Job Applications.</p>
         </field>
     </record>
 
