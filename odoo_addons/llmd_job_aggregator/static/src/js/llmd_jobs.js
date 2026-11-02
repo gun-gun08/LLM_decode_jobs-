@@ -823,7 +823,31 @@
         var internalHref = modal.getAttribute("data-internal");
         var signInFirst = modal.getAttribute("data-sign-in") === "1";
         var opener = null;
+        var captchaKey = "";      // the site's reCAPTCHA key (from /jobs/auth/state): with one, Odoo's /web/login only accepts a login that carries a Google token
+        var captchaReady = null;
 
+        function loadCaptcha() {
+            if (captchaKey && !captchaReady) {
+                captchaReady = new Promise(function (resolve, reject) {
+                    var s = document.createElement("script");
+                    s.src = "https://www.recaptcha.net/recaptcha/api.js?render=" + encodeURIComponent(captchaKey);
+                    s.onload = function () {
+                        window.grecaptcha.ready(resolve);
+                    };
+                    s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+            }
+            return captchaReady || Promise.resolve();
+        }
+        function captcha(action) {      // the token for Odoo's form, or "" without a key
+            if (!captchaKey) {
+                return Promise.resolve("");
+            }
+            return loadCaptcha().then(function () {
+                return window.grecaptcha.execute(captchaKey, { action: action });
+            });
+        }
         function parse(html) {
             return new DOMParser().parseFromString(html, "text/html");
         }
@@ -1040,6 +1064,8 @@
             showErr(message || "");
             return state().then(function (s) {
                 setCsrf(s.csrf_token);
+                captchaKey = s.recaptcha_key || "";
+                loadCaptcha().catch(function () {});      // ready before the visitor presses Login
                 if (s.signed_in || !s.login_required) {      // signed in meanwhile (another tab): straight on
                     next(s.name);
                 }
@@ -1123,7 +1149,13 @@
                 if (signup) {
                     form.elements.confirm_password.value = "";      // the password is only in the request to Odoo, nowhere else on the page
                 }
-                window.fetch(form.getAttribute("action"), { method: "POST", body: body, credentials: "same-origin" })
+                (signup ? Promise.resolve("") : captcha("login"))      // Odoo checks the token on login (action "login"); its sign-up does not
+                    .then(function (token) {
+                        if (token) {
+                            body.append("recaptcha_token_response", token);
+                        }
+                        return window.fetch(form.getAttribute("action"), { method: "POST", body: body, credentials: "same-origin" });
+                    })
                     .then(function (r) {
                         return r.text().then(function (text) {
                             return { path: pathOf(r.url), text: text };

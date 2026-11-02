@@ -11,6 +11,7 @@ from werkzeug.exceptions import NotFound
 
 from odoo import fields, http
 from odoo.http import request
+from odoo.tools import str2bool
 
 from odoo.addons.website.controllers.main import Website
 from odoo.addons.website_hr_recruitment.controllers.main import WebsiteHrRecruitment
@@ -1215,8 +1216,10 @@ class JobBoard(WebsiteHrRecruitment):
         forms, which the window posts to. It is also their `redirect` after a successful sign-in / sign-up, so the window knows it worked. Nothing else is read or kept."""
         user = request.env.user
         signed_in = bool(user and not user._is_public())
+        icp = request.env['ir.config_parameter'].sudo()
+        captcha = icp.get_param('recaptcha_public_key') if str2bool(icp.get_param('enable_recaptcha', default=True)) else ''      # Odoo's login checks a reCAPTCHA token when a key is set
         body = {'signed_in': signed_in, 'login_required': L.apply_login_required(request.env), 'csrf_token': request.csrf_token(),
-                'name': user.name if signed_in else ''}
+                'name': user.name if signed_in else '', 'recaptcha_key': captcha or ''}
         return request.make_response(json.dumps(body), headers=[('Content-Type', 'application/json'), ('Cache-Control', 'no-store')])
 
     @http.route('/jobs/ext/<int:listing_id>/go', type='http', auth='public', website=True, sitemap=False)
