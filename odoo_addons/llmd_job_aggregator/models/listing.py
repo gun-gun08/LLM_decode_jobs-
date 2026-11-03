@@ -27,6 +27,7 @@ _logger = logging.getLogger(__name__)
 
 SYNC_LOCK = 72940011                                  # PostgreSQL advisory lock id: one job sync at a time
 SYNC_BATCH_SIZE = 3                                   # company job boards per scheduled run (llmd_agg.sync_batch_size): about a minute, far below any time limit
+SYNC_BATCH_TRIES = 2                                  # a batch the server stopped this often (never finished) is skipped, so one slow board cannot halt the whole sync
 _BATCH_RUNS = set()                                   # (cron id, run end time) of the scheduled runs that already did their batch (one batch per run)
 
 # kept for the older imports of the controller / tests
@@ -915,6 +916,12 @@ class LlmdJobListing(models.Model):
             Cron._commit_progress(0, remaining=batches - pos // size)
             return None
         _BATCH_RUNS.add(run_key)
+        tried, _sep, count = (icp.get_param('llmd_agg.sync_batch_try') or '').partition(':')
+        count = int(count) if tried == str(pos) and count.isdigit() else 0
+        if count >= SYNC_BATCH_TRIES and total:                             # started that often and never finished (the server stopped it): go on with the next one
+            _logger.warning('job sync: batch at board %d was stopped %d times, skipped', pos + 1, count)
+            pos, count = (pos + size if pos + size < total else 0), 0
+        icp.set_param('llmd_agg.sync_batch_try', '%d:%d' % (pos, count + 1))
         part = (pos, pos + size)
         icp.set_param('llmd_agg.last_sync_report', 'Sync batch %d of %d started: %s UTC (company job boards %d-%d of %d) - running' % (
             pos // size + 1, batches, fields.Datetime.to_string(fields.Datetime.now()), part[0] + 1, min(part[1], total), total))
@@ -928,6 +935,7 @@ class LlmdJobListing(models.Model):
             stats, error = None, '%s: %s' % (exc.__class__.__name__, exc)
         nxt = part[1] if part[1] < total else 0
         icp.set_param('llmd_agg.sync_batch_pos', str(nxt))
+        icp.set_param('llmd_agg.sync_batch_try', '')
         self._sync_report(stats=stats, error=error, batch=(pos // size + 1, batches))
         left = batches - nxt // size if nxt else 0
         Cron._commit_progress(1, remaining=left)                            # 0 left: the whole board is done until the next day

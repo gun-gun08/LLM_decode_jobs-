@@ -552,6 +552,8 @@ def _sr_pages(token, keep, country, max_pages, ids, seen):
 
 
 SR_DETAIL_WORKERS = 4                                                   # detail requests of ONE SmartRecruiters board at the same time
+SR_DETAIL_SECONDS = 60                                                  # how long ONE SmartRecruiters board may read details (the newest first): a big board (Bosch) or a slow
+                                                                        # API must not keep a scheduled run past the server's time limit - the rest come on a later run
 
 
 def _smartrecruiters(token, name, keep, keep_place, per_board, country=None, ids=None, per_board_world=0, world_pages=3):
@@ -559,6 +561,7 @@ def _smartrecruiters(token, name, keep, keep_place, per_board, country=None, ids
     `per_board_world` - the first `world_pages` pages of its postings everywhere else. Only the kept ones are read in detail (one request each), at most
     `per_board` of the home country and `per_board_world` elsewhere, the newest. `ids` gets the ids of the listed postings - and None when a list was not read to
     its end, so that nothing is hidden because of an incomplete list; `ids_home` (the "<key>:in" set) holds the complete home-country list."""
+    deadline = time.monotonic() + SR_DETAIL_SECONDS
     seen = set()
     home_ids = set() if country else None
     picked, complete = _sr_pages(token, keep, country, 10, home_ids if country else ids, seen)
@@ -580,6 +583,8 @@ def _smartrecruiters(token, name, keep, keep_place, per_board, country=None, ids
         picked = sorted(picked, key=lambda x: x[0].get('releasedDate') or '', reverse=True)[:per_board]
     def one(item):                                                      # the text is only in the detail of a posting: read it for the jobs that are kept
         j, location, title = item
+        if time.monotonic() > deadline:
+            return None
         detail = _send('get', (SMARTRECRUITERS_URL % token) + '/' + str(j.get('id')), timeout=30, headers=UA)
         time.sleep(0.15)
         if detail.status_code != 200:
