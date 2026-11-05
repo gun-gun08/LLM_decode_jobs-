@@ -11,14 +11,18 @@ from werkzeug.exceptions import NotFound
 
 from odoo import fields, http
 from odoo.http import request
+from odoo.exceptions import UserError
 from odoo.tools import str2bool
 
+from odoo.addons.auth_signup.controllers.main import AuthSignupHome
 from odoo.addons.website.controllers.main import Website
 from odoo.addons.website_hr_recruitment.controllers.main import WebsiteHrRecruitment
 
 from ..models import apply_utils as A
 from ..models import board_config as C
 from ..models import job_facets as F
+from ..models import language as LANG
+from ..models import partner as PT
 from ..models import listing as L
 from ..models import urls as U
 from ..models.listing import valid_url
@@ -35,13 +39,16 @@ POSTED = [('1', 'Last 24 hours', 1), ('7', 'Last 7 days', 7), ('30', 'Last 30 da
 EXP_MAX = 25                                                                        # the experience slider runs 0 .. 25+ years
 LATEST = 12                                                                         # "Latest jobs": cards per batch ("Load More Jobs" brings the next batch)
 CODE_OF_COUNTRY = {name: code for code, name in F.COUNTRY_OF_CODE.items() if code != 'uk'}
-FILTERS = ('q', 'location', 'region', 'country', 'city', 'exp_min', 'exp_max', 'category', 'function', 'role', 'skill', 'company', 'size', 'mode', 'jtype', 'level', 'salary', 'posted', 'track')
+FILTERS = ('q', 'location', 'region', 'country', 'city', 'exp_min', 'exp_max', 'category', 'function', 'role', 'skill', 'lang', 'company', 'size', 'mode', 'jtype', 'level', 'salary', 'posted', 'track')
 OLD = ('loc', 'sort', 'view', 'exp', 'salary', 'tab', 'course')                     # older links that still lead to the results (?course= moves to /jobs/course/<course>)
 APPLY_NEXT = re.compile(r'/jobs/(?:ext/\d+/(?:go|apply)|position/\d+/go|apply/[\w-]+)')      # the only pages a sign-in for Apply Now may lead back to
 APPLY_NEXT_KEY = 'llmd_apply_next'                                                  # session: the Apply Now the visitor was on when asked to sign in
 REGION_INFO = {slug: (name, text, icon) for slug, name, text, icon in F.REGIONS + F.INDIA_ZONES}
 ZONES = {slug for slug, _n, _t, _i in F.INDIA_ZONES}
-LANDING_STATE = ('latest', 'latest_cat', 'rec', 'cm', 'rec_page')                    # the landing page's own state (Latest Jobs page, the course space): no filters
+LANDING_STATE = ('latest', 'latest_cat', 'rec', 'cm', 'rec_page')
+DEPARTMENT_ICONS = {'solutions': 'fa-puzzle-piece', 'data': 'fa-bar-chart', 'design': 'fa-paint-brush', 'product': 'fa-cube', 'marketing': 'fa-bullhorn',
+                    'customer': 'fa-handshake-o', 'security': 'fa-shield', 'legal': 'fa-balance-scale', 'supply': 'fa-truck', 'medical': 'fa-heartbeat',
+                    'finance': 'fa-money', 'sales': 'fa-line-chart', 'it': 'fa-desktop', 'engineering': 'fa-code', 'people': 'fa-users', 'operations': 'fa-cogs'}                    # the landing page's own state (Latest Jobs page, the course space): no filters
 
 
 def latest_path(category='', page=1):
@@ -275,7 +282,7 @@ class JobBoard(WebsiteHrRecruitment):
         state = {'q': (args.get('q') or search or '').strip()[:80], 'location': (args.get('location') or '').strip()[:60], 'country': (args.get('country') or '').strip()[:60],
                  'city': _free(args, 'city', 10, 60), 'exp_min': low, 'exp_max': high, 'category': _multi(args, 'category', C.CATEGORY_LABELS),
                  'function': _multi(args, 'function', C.FUNCTION_LABELS), 'role': _multi(args, 'role', C.ROLE_LABELS), 'skill': _free(args, 'skill', 10, 60),
-                 'company': _free(args, 'company', 15), 'size': _multi(args, 'size', C.COMPANY_SIZE_LABELS),
+                 'lang': _multi(args, 'lang', {n: n for n, _rx in LANG.LANGUAGES}), 'company': _free(args, 'company', 15), 'size': _multi(args, 'size', C.COMPANY_SIZE_LABELS),
                  'level': _multi(args, 'level', dict(F.EXP_FILTER)), 'salary': _multi(args, 'salary', F.SALARY_BAND_LABELS), 'mode': args.get('mode') if args.get('mode') in F.MODE_LABELS else '', 'jtype': _multi(args, 'jtype', F.TYPE_LABELS),
                  'posted': args.get('posted') if args.get('posted') in dict((k, l) for k, l, _d in POSTED) else '', 'course': course,
                  'region': args.get('region') if args.get('region') in REGION_INFO else '',
@@ -437,6 +444,31 @@ class JobBoard(WebsiteHrRecruitment):
     def llmd_category_directory(self, **kwargs):
         return self.llmd_categories(**kwargs)
 
+    @http.route('/roles', type='http', auth='public', website=True, sitemap=False)
+    def llmd_role_directory(self, **kwargs):
+        """Every job role that has open jobs now (board_config.ROLES, worked out from the job titles), with its jobs and companies - a role appears with its first job."""
+        listing = request.env['llmd.job.listing'].sudo()
+        active = [('active', '=', True)]
+        jobs, companies = Counter(), {}
+        for row in listing.search_read(active + [('roles', '!=', False)], ['roles', 'company']):
+            for code in (row['roles'] or '').strip(',').split(','):
+                if code in C.ROLE_LABELS:
+                    jobs[code] += 1
+                    companies.setdefault(code, set()).add(row['company'] or '')
+        roles = sorted([(code.replace('_', '-'), C.ROLE_LABELS[code], jobs[code], len(companies[code] - {''})) for code in jobs], key=lambda r: (-r[2], r[1]))
+        return request.render('llmd_job_aggregator.role_directory', {'roles': roles, 'total': listing.search_count(active)})
+
+    @http.route('/departments', type='http', auth='public', website=True, sitemap=False)
+    def llmd_department_directory(self, **kwargs):
+        """Every department (job function) that has open jobs now, with its jobs and companies."""
+        listing = request.env['llmd.job.listing'].sudo()
+        active = [('active', '=', True)]
+        counts = dict(listing._read_group(active + [('job_function', '!=', False)], ['job_function'], ['__count']))
+        companies = Counter(f for f, _co, _n in listing._read_group(active + [('job_function', '!=', False), ('company', '!=', False)], ['job_function', 'company'], ['__count']))
+        depts = sorted([(key, label, counts[key], companies[key], DEPARTMENT_ICONS.get(key, 'fa-sitemap')) for key, label, _rx in C.JOB_FUNCTIONS if counts.get(key)],
+                       key=lambda d: -d[2])
+        return request.render('llmd_job_aggregator.department_directory', {'depts': depts, 'total': listing.search_count(active)})
+
     @http.route(['/categories/<string:slug>', '/categories/<string:slug>/<path:rest>'], type='http', auth='public', website=True, sitemap=False)
     def llmd_category_page(self, slug, rest='', **kwargs):
         """The jobs of one category / industry (board_config.JOB_CATEGORIES) - only one that has open jobs; an older category name moves to its new one."""
@@ -446,7 +478,7 @@ class JobBoard(WebsiteHrRecruitment):
         if not category or not request.env['llmd.job.listing'].sudo().search_count([('active', '=', True), ('job_category', '=', slug)], limit=1):
             raise NotFound()
         scope = {'kind': 'category', 'value': slug, 'label': category[1], 'title': '%s jobs' % category[1], 'description': category[2], 'icon': category[3],
-                 'crumb': ('Categories', '/categories')}
+                 'crumb': ('Industries', '/categories')}
         return self._llmd_list(scope, rest)
 
     @http.route(['/departments/<string:slug>', '/departments/<string:slug>/<path:rest>'], type='http', auth='public', website=True, sitemap=False)
@@ -455,7 +487,7 @@ class JobBoard(WebsiteHrRecruitment):
         label = C.FUNCTION_LABELS.get(slug)
         if not label or not request.env['llmd.job.listing'].sudo().search_count([('active', '=', True), ('job_function', '=', slug)], limit=1):
             raise NotFound()
-        scope = {'kind': 'department', 'value': slug, 'label': label, 'title': '%s jobs' % label, 'icon': 'fa-sitemap', 'crumb': ('Jobs Explorer', '/jobs'),
+        scope = {'kind': 'department', 'value': slug, 'label': label, 'title': '%s jobs' % label, 'icon': DEPARTMENT_ICONS.get(slug, 'fa-sitemap'), 'crumb': ('Departments', '/departments'),
                  'description': 'Open roles in %s teams, from every company on the board.' % label}
         return self._llmd_list(scope, rest)
 
@@ -507,10 +539,71 @@ class JobBoard(WebsiteHrRecruitment):
             raise NotFound()
         name, hq = company.name, company.hq()
         scope = {'kind': 'company', 'value': name, 'company_id': company.id, 'company_path': company.website_path(), 'label': name, 'title': name,
-                 'icon': 'fa-building-o', 'initial': name.strip()[:1].upper(), 'crumb': ('Companies', '/companies'),
+                 'icon': 'fa-building-o', 'initial': name.strip()[:1].upper(), 'crumb': ('Companies', '/companies'), 'profile': self._llmd_company_profile(company),
                  'description': 'Open roles at %s, read from its own job board%s. Apply Now opens its application page.' % (
                      name, ' - headquarters: %s (%s)' % (hq, F.REGION_LABELS.get(F.COUNTRY_REGION.get(hq, ''), '')) if hq else '')}
         return self._llmd_list(scope, rest)
+
+    @staticmethod
+    def _llmd_company_profile(company):
+        """The company card of /companies/<slug>, worked out from the company's own open jobs (counted live): its main industry, where it hires, how
+        (remote / hybrid / on-site), which kinds of roles (with job titles) and for which experience levels; its headquarters and size when verified
+        (board_config); website and LinkedIn only when the company itself gave them (an employer account that posted here). Nothing is invented."""
+        Listing = request.env['llmd.job.listing'].sudo()
+        own = [('active', '=', True), ('company_id', '=', company.id)]
+        total = Listing.search_count(own)
+        if not total:
+            return {}
+
+        def grouped(field, limit=6):
+            return sorted([(v, n) for v, n in Listing._read_group(own + [(field, '!=', False)], [field], ['__count'])], key=lambda r: -r[1])[:limit]
+        modes = grouped('work_mode', 3)
+        known = sum(n for _v, n in modes)
+        roles = []
+        for cat, n in grouped('job_category', 4):
+            titles = list(dict.fromkeys(r['title'] for r in Listing.search_read(own + [('job_category', '=', cat)], ['title'], limit=12)))[:3]
+            roles.append((C.CATEGORY_LABELS.get(cat, cat), n, titles, '/categories/%s' % cat))
+        poster = Listing.with_context(active_test=False).search(own[1:] + [('post_kind', '=', 'employer'), ('poster_id', '!=', False)], limit=1).poster_id.partner_id
+        hq = company.hq()
+        name = company.name
+        mode_rows = [(F.MODE_LABELS.get(m, m), n, round(100.0 * n / known) if known else 0) for m, n in modes]
+        countries = [(c, n, '/locations/%s' % slugify(c)) for c, n in grouped('country')]
+        cities = [(c, n, '/locations/%s' % slugify(c)) for c, n in grouped('city')]
+        levels = [(F.EXP_LABELS.get(l, l), n) for l, n in grouped('exp_level', 5)]
+
+        def jobs(n):
+            return '%d job%s' % (n, '' if n == 1 else 's')
+
+        def listed(items):
+            return items[0] if len(items) == 1 else '%s and %s' % (', '.join(items[:-1]), items[-1]) if items else ''
+        brief = {'intro': '%s has %s open on the board right now%s.' % (name, jobs(total), ', most of them in %s' % listed(
+            ['%s (%d)' % (r[0], r[1]) for r in roles[:2]]) if roles else '')}
+        if mode_rows:
+            main = mode_rows[0]
+            brief['mode'] = ('%s hires mainly %s: %d%% of its jobs that state a work mode are %s.' % (name, main[0].lower(), main[2], main[0].lower())
+                             if main[2] >= 60 else '%s offers a mix of ways of working: %s.' % (name, listed(['%s %d%%' % (m[0].lower(), m[2]) for m in mode_rows])))
+            if total - known:
+                brief['mode'] += ' %s do not say.' % jobs(total - known).capitalize()
+        if countries:
+            top = countries[0]
+            city_in_top = next((c for c in cities if Listing.search_count(own + [('city', '=', c[0]), ('country', '=', top[0])])), None)
+            brief['where'] = 'Most of its jobs are in %s (%d of %d)%s.' % (top[0], top[1], total, ', mainly in %s' % city_in_top[0] if city_in_top else '')
+            if len(countries) > 1:
+                brief['where'] += ' It also hires in %s.' % listed([c[0] for c in countries[1:5]])
+        if roles:
+            brief['roles'] = 'Its open roles fall into %d industr%s, with the most in %s.' % (
+                len(grouped('job_category', 50)), 'y' if len(grouped('job_category', 50)) == 1 else 'ies', roles[0][0])
+        if levels:
+            brief['levels'] = 'Most roles are %s (%d)%s.' % (levels[0][0].lower(), levels[0][1], '; it also hires %s' % listed(
+                ['%s (%d)' % (l[0].lower(), l[1]) for l in levels[1:]]) if len(levels) > 1 else '')
+        website = valid_url(company.website or '') or (valid_url(poster.website or '') if poster else '')
+        linkedin = valid_url(company.linkedin or '') or (valid_url(poster.llmd_linkedin or '') if poster else '')
+        return {
+            'total': total, 'industry': company.industry or (roles[0][0] if roles else ''), 'description': company.description or '',
+            'hq': hq, 'hq_region': F.REGION_LABELS.get(F.COUNTRY_REGION.get(hq, ''), '') if hq else '', 'size': company.size_label(),
+            'website': website, 'linkedin': linkedin, 'linkedin_search': '' if linkedin else company.linkedin_search(),
+            'modes': mode_rows, 'mode_unknown': total - known, 'countries': countries, 'cities': cities, 'roles': roles, 'levels': levels, 'brief': brief,
+        }
 
     @http.route(['/jobs/location/<string:slug>', '/jobs/location/<string:slug>/page/<int:page>'], type='http', auth='public', website=True, sitemap=False)
     def llmd_location(self, slug, page=1, **kwargs):
@@ -557,7 +650,8 @@ class JobBoard(WebsiteHrRecruitment):
                 if job:
                     if not job.active:
                         return self._llmd_job_gone(job.id)
-                    return request.render('llmd_job_aggregator.board_detail', {'job': job, 'd': job.detail_vals(), 'similar': self._llmd_similar(job)})
+                    return request.render('llmd_job_aggregator.board_detail', {'job': job, 'd': job.detail_vals(), 'similar': self._llmd_similar(job, 5),
+                                                                               'company_jobs': self._llmd_company_jobs(job)})
             if first in REGION_INFO:
                 return self._llmd_moved(U.region_path(first) + ('/' + more if more else ''))
             if first != 'remote' and self._llmd_place(first):
@@ -646,7 +740,7 @@ class JobBoard(WebsiteHrRecruitment):
         if code not in C.ROLE_LABELS:
             raise NotFound()
         label = C.ROLE_LABELS[code]
-        scope = {'kind': 'role', 'value': code, 'label': label, 'title': '%s jobs' % label, 'icon': 'fa-id-badge', 'crumb': ('Roles', '/jobs#popular'),
+        scope = {'kind': 'role', 'value': code, 'label': label, 'title': '%s jobs' % label, 'icon': 'fa-id-badge', 'crumb': ('Job roles', '/roles'),
                  'description': 'Jobs whose title names this role (%s), from every working source.' % label}
         return self._llmd_list(scope, rest)
 
@@ -689,6 +783,8 @@ class JobBoard(WebsiteHrRecruitment):
             domain += _any([('roles', 'ilike', ',%s,' % r) for r in state['role']])
         if state['skill'] and 'skill' not in skip:
             domain += _any([('skill_keys', 'ilike', ',%s,' % F.skill_key(s)) for s in state['skill']])
+        if state.get('lang') and 'lang' not in skip:
+            domain += _any([('languages', 'ilike', '%s:' % n) for n in state['lang']])
         if state['company'] and 'company' not in skip:
             domain.append(('company', 'in', state['company']))
         if state['mode'] and 'mode' not in skip:
@@ -805,6 +901,10 @@ class JobBoard(WebsiteHrRecruitment):
             role_hits.update(c for c in (row['roles'] or '').strip(',').split(',') if c in C.ROLE_LABELS)
         for row in listing.search_read(dom(('skill',)), ['skill_keys']):
             skill_hits.update(k for k in (row['skill_keys'] or '').strip(',').split(',') if k)
+        lang_hits = Counter()
+        for row in listing.search_read(dom(('lang',)) + [('languages', '!=', False)], ['languages']):
+            lang_hits.update({part.split(':')[0] for part in (row['languages'] or '').split(',') if part})
+        languages = [(n, lang_hits.get(n, 0)) for n, _rx in LANG.LANGUAGES if lang_hits.get(n) or n in state.get('lang', [])]
         skill_names = _skill_names(listing)
         skills = [(skill_names.get(k, k), n) for k, n in skill_hits.most_common(40)]
         known = {F.skill_key(s) for s, _n in skills}
@@ -833,7 +933,7 @@ class JobBoard(WebsiteHrRecruitment):
         if state['track']:
             chips.append((C.TRACK_LABELS[state['track']], href(track='')))
         for name, values, label_of in (('city', state['city'], None), ('category', state['category'], C.CATEGORY_LABELS), ('function', state['function'], C.FUNCTION_LABELS),
-                                       ('role', state['role'], C.ROLE_LABELS), ('skill', state['skill'], None), ('company', state['company'], None), ('size', state['size'], C.COMPANY_SIZE_LABELS),
+                                       ('role', state['role'], C.ROLE_LABELS), ('skill', state['skill'], None), ('lang', state['lang'], None), ('company', state['company'], None), ('size', state['size'], C.COMPANY_SIZE_LABELS),
                                        ('level', state['level'], dict(F.EXP_FILTER)), ('salary', state['salary'], F.SALARY_BAND_LABELS),
                                        ('jtype', state['jtype'], F.TYPE_LABELS)):
             for v in values:
@@ -858,7 +958,7 @@ class JobBoard(WebsiteHrRecruitment):
             'listings': listings, 'total': total, 'pager': pager, 'own_page': bool(own), 'state': state, 'fq': fq, 'href': href, 'base': base, 'form_action': base,
             'chips': filter_chips, 'clear_href': clear_href, 'any_active': bool(filter_chips), 'regions': regions,
             'companies': companies, 'countries': countries, 'cities': [(city, country, n) for country, city, n in city_rows], 'functions': functions, 'categories': categories,
-            'roles': [(c, C.ROLE_LABELS[c], n) for c, n in role_hits.most_common()], 'skills': skills,
+            'roles': [(c, C.ROLE_LABELS[c], n) for c, n in role_hits.most_common()], 'skills': skills, 'languages_opts': languages,
             'jtypes': [(k, l, jtypes.get(k, 0), k in state['jtype']) for k, l in F.JOB_TYPES],
             'sizes': [(k, l, sizes.get(k, 0), k in state['size']) for k, l in C.COMPANY_SIZES],
             'levels': [(k, l, levels.get(k, 0), k in state['level']) for k, l in F.EXP_FILTER],
@@ -935,6 +1035,8 @@ class JobBoard(WebsiteHrRecruitment):
             'cm_step': 'start' if not args.get('rec') else ('jobs' if args.get('cm') == 'jobs' or args.get('rec_page') else ('pick' if args.get('cm') == 'pick' else 'info')),
             'latest_path': latest_path, 'course_counts': {co['code']: listing.search_count(active + _course_domain(co)) for co in courses},
             'own_jobs': own_jobs,
+            'llmd_posts': listing.search(active + [('post_kind', '=', 'llmdecode')], order='pinned desc, posted desc, id desc', limit=6),
+            'llmd_post_total': listing.search_count(active + [('post_kind', '=', 'llmdecode')]),
             'location_options': [c for c, _n in countries] + ['Delhi NCR'] + [c for c, _n in cities[:60]] + ['Remote'],
             'term_labels': C.COURSE_TERM_LABELS, 'card_cols': 'col-md-6 col-xl-4', 'slugify': slugify,
         })
@@ -1124,18 +1226,32 @@ class JobBoard(WebsiteHrRecruitment):
         return response
 
     @staticmethod
+    def _llmd_company_jobs(job, limit=6):
+        """(the other open jobs of the same company, newest first, how many it has in all) - "Other jobs at <company>"."""
+        if not job.company_id:
+            return (job.browse(), 0)
+        Listing = request.env['llmd.job.listing'].sudo()
+        own = [('active', '=', True), ('company_id', '=', job.company_id.id), ('id', '!=', job.id)]
+        return (Listing.search(own, order='posted desc, id desc', limit=limit), Listing.search_count(own))
+
+    @staticmethod
     def _llmd_similar(job, limit=3):
-        """Up to three other real jobs like this one: the same course role first, then the same category (Indian jobs first, the newest first)."""
+        """Other real jobs like this one: the same course role first, then the same category chip, the same industry, the same department, the same
+        country, the same work mode, else the newest - other companies first (the company's own jobs have their own list), then that company too."""
         Listing = request.env['llmd.job.listing'].sudo()
         found = Listing.browse()
         wanted = [('roles', 'ilike', ',%s,' % r) for r in (job.roles or '').strip(',').split(',') if r][:1]
         code = job.card_track()[0]
         if code:
             wanted.append(('tags', 'ilike', ',%s,' % code))
-        for leaf in wanted:
-            if len(found) >= limit:
-                break
-            found |= Listing.search([('active', '=', True), ('id', 'not in', [job.id] + found.ids), leaf], limit=limit - len(found))
+        wanted += [(name, '=', job[name]) for name in ('job_category', 'job_function', 'country', 'work_mode') if job[name]]
+        wanted.append(('id', '!=', job.id))                                  # last: the newest other jobs, so no job page is left without related jobs
+        others = [('company_id', '!=', job.company_id.id)] if job.company_id else []
+        for extra in (others, []) if others else ([],):
+            for leaf in wanted:
+                if len(found) >= limit:
+                    return found
+                found |= Listing.search([('active', '=', True), ('id', 'not in', [job.id] + found.ids), leaf] + extra, limit=limit - len(found), order='posted desc, id desc')
         return found
 
     # ------------------------------------------------------------------ Apply Now - ONE flow for every Apply Now button of the site
@@ -1219,8 +1335,20 @@ class JobBoard(WebsiteHrRecruitment):
         icp = request.env['ir.config_parameter'].sudo()
         captcha = icp.get_param('recaptcha_public_key') if str2bool(icp.get_param('enable_recaptcha', default=True)) else ''      # Odoo's login checks a reCAPTCHA token when a key is set
         body = {'signed_in': signed_in, 'login_required': L.apply_login_required(request.env), 'csrf_token': request.csrf_token(),
-                'name': user.name if signed_in else '', 'recaptcha_key': captcha or ''}
+                'name': user.name if signed_in else '', 'recaptcha_key': captcha or '',
+                'role': (user.partner_id.llmd_role or '') if signed_in else '', 'internal': bool(signed_in and user._is_internal())}
         return request.make_response(json.dumps(body), headers=[('Content-Type', 'application/json'), ('Cache-Control', 'no-store')])
+
+    @http.route('/jobs/auth/role', type='http', auth='user', website=True, methods=['POST'], sitemap=False)
+    def llmd_auth_role(self, llmd_role='', **post):
+        role = llmd_role
+        """The sign-in window, for an account whose role is not known yet: job seeker or hiring (with the company details) - saved on the person's contact."""
+        hirer_vals, error = PT.clean_hirer(post, required=False) if role == 'hirer' else ({}, '')
+        if role not in dict(PT.ROLES):
+            error = 'Please choose one.'
+        if not error:
+            request.env['res.partner'].llmd_set_role(request.env.user.partner_id, role, hirer_vals)
+        return request.make_json_response({'ok': not error, 'error': error, 'role': role if not error else ''}, headers=[('Cache-Control', 'no-store')])
 
     @http.route('/jobs/ext/<int:listing_id>/go', type='http', auth='public', website=True, sitemap=False)
     def llmd_board_go(self, listing_id, **kwargs):
@@ -1316,6 +1444,8 @@ class JobBoard(WebsiteHrRecruitment):
             _logger.exception('job application could not be saved (listing %s)', job.id)
             errors['form'] = 'Sorry, your application could not be saved right now, so nothing was sent. Please try again in a few minutes.'
             return self._llmd_page('llmd_job_aggregator.board_apply', job, 500, vid, vals=vals, errors=errors, max_mb=max_mb)
+        if status == 'created':
+            job.notify_application(rec)                                   # a job an employer posted here: they get an e-mail (never stops the application)
         return self._llmd_set_cookie(request.redirect('/jobs/ext/%d/applied?ref=%d&t=%s%s' % (job.id, rec.id, Application.token(rec.id), '&again=1' if status == 'duplicate' else '')), vid)
 
     @http.route('/jobs/ext/<int:listing_id>/applied', type='http', auth='public', website=True, sitemap=False)
@@ -1349,4 +1479,49 @@ class LlmdLogin(Website):
             pending = request.session.pop(APPLY_NEXT_KEY, None)
             if isinstance(pending, str) and APPLY_NEXT.fullmatch(pending):
                 redirect = pending
+        if not redirect:                                                # signed in without a page to go back to: a hirer to the page for companies, a job seeker to the jobs
+            user = request.env['res.users'].sudo().browse(uid)
+            if user.exists() and not user._is_internal() and user.partner_id.llmd_role:
+                redirect = '/jobs/employers' if user.partner_id.llmd_role == 'hirer' else '/jobs'
         return super()._login_redirect(uid, redirect=redirect)
+
+
+class LlmdSignup(AuthSignupHome):
+    """Odoo's sign-up (/web/signup - its own page and the sign-in window of the job board) also asks: job seeker or hiring - saved on the new person's
+    contact (a hirer's company details come with their first job, Section 1 of Post a job). Without the choice the sign-up works as before."""
+
+    def _prepare_signup_values(self, qcontext):
+        values = super()._prepare_signup_values(qcontext)
+        if not qcontext.get('token') and 'llmd_signup_phone' in request.params:      # the job board's sign-up window asks a phone number
+            if not PT.clean_phone(request.params.get('llmd_signup_phone')):
+                raise UserError('Please enter a valid phone number.')
+        if not qcontext.get('token') and request.params.get('llmd_role') == 'hirer':
+            _vals, error = PT.clean_hirer(request.params, required=False)
+            if error:
+                raise UserError(error)
+        return values
+
+    def _signup_with_values(self, token, values, do_login):
+        super()._signup_with_values(token, values, do_login)
+        phone = PT.clean_phone(request.params.get('llmd_signup_phone'))
+        if phone and not token:                                         # the phone of the sign-up window, on the new person's contact
+            try:
+                with request.env.cr.savepoint():
+                    Users = request.env['res.users'].sudo()
+                    user = Users.search(Users._get_login_domain(values.get('login')), limit=1)
+                    if user:
+                        user.partner_id.phone = phone
+            except Exception:
+                _logger.exception('sign-up: the phone number could not be saved')
+        role = request.params.get('llmd_role')
+        if token or role not in dict(PT.ROLES):
+            return
+        try:
+            with request.env.cr.savepoint():
+                Users = request.env['res.users'].sudo()
+                user = Users.search(Users._get_login_domain(values.get('login')), limit=1)
+                hirer_vals = PT.clean_hirer(request.params, required=False)[0] if role == 'hirer' else {}
+                if user:
+                    request.env['res.partner'].sudo().llmd_set_role(user.partner_id, role, hirer_vals)
+        except Exception:                                               # the account exists; the role is asked again after the next sign-in
+            _logger.exception('sign-up: the job board role could not be saved')

@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================== jobs posted on the website itself (controllers/posts.py, models/post.py) ==============================
+         /jobs/post (intro + sign-in window for a visitor, the form for a signed-in account), /jobs/my (the employer's own jobs), /jobs/my/<id>/applicants,
+         /jobs/llmdecode (every live "Posted by LLM Decode" job). Styles: static/src/css/llmd_jobs.css (.o_llmd_post_page). -->
+
+    <!-- /jobs/post for a signed-in account, in two steps like a company fills it in: 1. the company and the contact person (name and e-mail from the account),
+         2. the role, and its description as a PDF, a link to the posting, or typed in (at least one). Expects: vals, errors, user_name, user_email,
+         open_n, max_open, modes, types, levels, post_days, max_mb -->
+    <template id="post_form" name="LLMD: post a job (form)">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Post a job</t>
+            <div id="wrap" class="o_llmd_board o_llmd_post_page">
+                <div class="container o_llmd_post_wrap">
+                    <p class="o_llmd_post_nav"><a href="/jobs/employers"><i class="fa fa-arrow-left" aria-hidden="true"/> For companies</a> · <a href="/jobs/my">My jobs</a></p>
+                    <div class="o_llmd_post_intro">
+                        <h1 class="o_llmd_h2">Post a job</h1>
+                        <p class="o_llmd_post_sub">Get your job in front of LLM Decode learners.</p>
+                        <p class="o_llmd_post_lead mb-2">Once your job is approved it is:</p>
+                        <ul class="o_llmd_post_gets">
+                            <li><i class="fa fa-check-square" aria-hidden="true"/> Live on the LLM Decode job board for <t t-out="post_days"/> days</li>
+                            <li><i class="fa fa-check-square" aria-hidden="true"/> Shown on its industry, company and city pages</li>
+                            <li><i class="fa fa-check-square" aria-hidden="true"/> Matched to the LLM Decode courses that fit it</li>
+                            <li><i class="fa fa-check-square" aria-hidden="true"/> Applicants and resumes under My jobs</li>
+                        </ul>
+                    </div>
+                    <div t-if="open_n &gt;= max_open" class="alert alert-warning" role="status">You already have <t t-out="open_n"/> open jobs (the limit is <t t-out="max_open"/>). Close one under <a href="/jobs/my">My jobs</a> to post another.</div>
+                    <div t-if="free_post" class="alert alert-success o_llmd_credit_note" role="status"><i class="fa fa-gift" aria-hidden="true"/> Your first job is <b>free</b>.</div>
+                    <div t-elif="credits" class="alert alert-info o_llmd_credit_note" role="status"><i class="fa fa-ticket" aria-hidden="true"/> This job uses 1 of your <b t-out="credits"/> job credit<t t-if="credits != 1">s</t>.</div>
+                    <div t-else="" class="alert alert-warning o_llmd_credit_note" role="status"><i class="fa fa-info-circle" aria-hidden="true"/> Your free job is used. <a href="/jobs/employers#plans">Buy a plan</a> to post more jobs - from ₹1,000 for 3 jobs.</div>
+                    <div t-if="errors.get('form')" class="alert alert-danger" role="alert" t-out="errors['form']"/>
+                    <form method="post" action="/jobs/post" enctype="multipart/form-data" class="o_llmd_post_form" novalidate="novalidate">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <div style="position: absolute; left: -9999px;" aria-hidden="true"><input type="text" name="company_website" tabindex="-1" autocomplete="off"/></div>
+
+                        <h2 class="o_llmd_post_step"><span>1</span> Tell us about your company</h2>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_name">Your name</label>
+                                <input id="p_name" class="form-control" t-att-value="user_name" readonly="readonly" disabled="disabled"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_email">Professional e-mail</label>
+                                <input id="p_email" class="form-control" t-att-value="user_email" readonly="readonly" disabled="disabled"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_phone">Phone number <span class="text-danger">*</span></label>
+                                <input id="p_phone" name="phone" type="tel" t-attf-class="form-control #{'is-invalid' if errors.get('phone') else ''}" maxlength="30" t-att-value="vals.get('phone', '')" placeholder="+91 98xxxxxxxx" autocomplete="tel"/>
+                                <div t-if="errors.get('phone')" class="invalid-feedback d-block" t-out="errors['phone']"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_company">Company name <span class="text-danger">*</span></label>
+                                <input id="p_company" name="company" t-attf-class="form-control #{'is-invalid' if errors.get('company') else ''}" maxlength="120" t-att-value="vals.get('company', '')" autocomplete="organization"/>
+                                <div t-if="errors.get('company')" class="invalid-feedback d-block" t-out="errors['company']"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_designation">Your designation <span class="text-danger">*</span></label>
+                                <input id="p_designation" name="designation" t-attf-class="form-control #{'is-invalid' if errors.get('designation') else ''}" maxlength="80" t-att-value="vals.get('designation', '')" placeholder="HR Manager" autocomplete="organization-title"/>
+                                <div t-if="errors.get('designation')" class="invalid-feedback d-block" t-out="errors['designation']"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_website">Company website <span class="text-danger">*</span></label>
+                                <input id="p_website" name="company_site" t-attf-class="form-control #{'is-invalid' if errors.get('company_site') else ''}" maxlength="200" t-att-value="vals.get('company_site', '')" placeholder="https://yourcompany.com"/>
+                                <div t-if="errors.get('company_site')" class="invalid-feedback d-block" t-out="errors['company_site']"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_linkedin">Company LinkedIn <span class="text-muted">(optional)</span></label>
+                                <input id="p_linkedin" name="linkedin" t-attf-class="form-control #{'is-invalid' if errors.get('linkedin') else ''}" maxlength="200" t-att-value="vals.get('linkedin', '')" placeholder="https://linkedin.com/company/..."/>
+                                <div t-if="errors.get('linkedin')" class="invalid-feedback d-block" t-out="errors['linkedin']"/>
+                            </div>
+                        </div>
+
+                        <h2 class="o_llmd_post_step"><span>2</span> Tell us about the role</h2>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_title">Job title <span class="text-danger">*</span></label>
+                                <input id="p_title" name="title" t-attf-class="form-control #{'is-invalid' if errors.get('title') else ''}" maxlength="120" t-att-value="vals.get('title', '')" placeholder="Sales executive"/>
+                                <div t-if="errors.get('title')" class="invalid-feedback d-block" t-out="errors['title']"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="p_location">Location <span class="text-danger">*</span></label>
+                                <input id="p_location" name="location" t-attf-class="form-control #{'is-invalid' if errors.get('location') else ''}" maxlength="120" t-att-value="vals.get('location', '')" placeholder="Noida, India"/>
+                                <div t-if="errors.get('location')" class="invalid-feedback d-block" t-out="errors['location']"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_mode">Work mode <span class="text-danger">*</span></label>
+                                <select id="p_mode" name="work_mode" t-attf-class="form-select #{'is-invalid' if errors.get('work_mode') else ''}">
+                                    <option value="">Choose…</option>
+                                    <option t-foreach="modes" t-as="m" t-att-value="m[0]" t-att-selected="m[0] == vals.get('work_mode') or None" t-out="m[1]"/>
+                                </select>
+                                <div t-if="errors.get('work_mode')" class="invalid-feedback d-block" t-out="errors['work_mode']"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_type">Job type <span class="text-danger">*</span></label>
+                                <select id="p_type" name="job_type" t-attf-class="form-select #{'is-invalid' if errors.get('job_type') else ''}">
+                                    <option value="">Choose…</option>
+                                    <option t-foreach="types" t-as="tp" t-att-value="tp[0]" t-att-selected="tp[0] == vals.get('job_type') or None" t-out="tp[1]"/>
+                                </select>
+                                <div t-if="errors.get('job_type')" class="invalid-feedback d-block" t-out="errors['job_type']"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_dept">Department <span class="text-danger">*</span></label>
+                                <select id="p_dept" name="department" t-attf-class="form-select #{'is-invalid' if errors.get('department') else ''}">
+                                    <option value="">Choose…</option>
+                                    <option t-foreach="departments" t-as="dp" t-att-value="dp[0]" t-att-selected="dp[0] == vals.get('department') or None" t-out="dp[1]"/>
+                                </select>
+                                <div t-if="errors.get('department')" class="invalid-feedback d-block" t-out="errors['department']"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_level">Experience level</label>
+                                <select id="p_level" name="exp_level" class="form-select">
+                                    <option value="">Not specified</option>
+                                    <option t-foreach="levels" t-as="lv" t-att-value="lv[0]" t-att-selected="lv[0] == vals.get('exp_level') or None" t-out="lv[1]"/>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_exp">Experience (years)</label>
+                                <input id="p_exp" name="experience" class="form-control" maxlength="60" t-att-value="vals.get('experience', '')" placeholder="0-2 years"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_salary">Salary <span class="text-muted">(optional)</span></label>
+                                <input id="p_salary" name="salary" class="form-control" maxlength="80" t-att-value="vals.get('salary', '')" placeholder="₹4-6 LPA"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="p_skills">Skills <span class="text-muted">(comma separated)</span></label>
+                                <input id="p_skills" name="skills" class="form-control" maxlength="600" t-att-value="vals.get('skills', '')" placeholder="CRM, Excel"/>
+                            </div>
+                        </div>
+
+                        <div class="o_llmd_jd_box">
+                            <p class="o_llmd_jd_head">Job description <span class="text-danger">*</span> <span class="text-muted">- choose one or more of the ways below</span></p>
+                            <div t-if="errors.get('description')" class="alert alert-danger py-2" role="alert" t-out="errors['description']"/>
+                            <label class="form-label" for="p_pdf">Attach a PDF of your job posting <span class="text-muted">(up to <t t-out="max_mb"/> MB)</span></label>
+                            <input id="p_pdf" name="jd_pdf" type="file" accept=".pdf" t-attf-class="form-control #{'is-invalid' if errors.get('jd_pdf') else ''}"/>
+                            <div t-if="errors.get('jd_pdf')" class="invalid-feedback d-block" t-out="errors['jd_pdf']"/>
+                            <label class="form-label mt-3" for="p_jdurl">Provide the URL of your job posting</label>
+                            <input id="p_jdurl" name="jd_url" t-attf-class="form-control #{'is-invalid' if errors.get('jd_url') else ''}" maxlength="2000" t-att-value="vals.get('jd_url', '')" placeholder="https://careers.yourcompany.com/job/123"/>
+                            <div t-if="errors.get('jd_url')" class="invalid-feedback d-block" t-out="errors['jd_url']"/>
+                            <label class="form-label mt-3" for="p_desc">Fill in the job description</label>
+                            <textarea id="p_desc" name="description" rows="8" class="form-control" maxlength="8000" placeholder="About the role&#10;- Responsibilities (start a line with - for a list)&#10;- Requirements&#10;Benefits" t-out="vals.get('description', '')"/>
+                        </div>
+
+                        <div class="o_llmd_apply_how">
+                            <span class="form-label d-block">How should people apply?</span>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="apply_how" id="p_how_form" value="form" t-att-checked="None if vals.get('apply_how') == 'link' else 'checked'"/>
+                                <label class="form-check-label" for="p_how_form">On the LLM Decode application form - you see applicants and resumes under My jobs</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="apply_how" id="p_how_link" value="link" t-att-checked="'checked' if vals.get('apply_how') == 'link' else None"/>
+                                <label class="form-check-label" for="p_how_link">On my own application page</label>
+                            </div>
+                            <input name="apply_url" t-attf-class="form-control mt-2 o_llmd_apply_url #{'is-invalid' if errors.get('apply_url') else ''}" maxlength="2000" t-att-value="vals.get('apply_url', '')" placeholder="https://careers.yourcompany.com/apply/123" aria-label="Your application page"/>
+                            <div t-if="errors.get('apply_url')" class="invalid-feedback d-block" t-out="errors['apply_url']"/>
+                        </div>
+                        <div class="o_llmd_post_actions">
+                            <button type="submit" class="btn o_llmd_btn_primary">Publish your job</button>
+                        </div>
+                        <p class="o_llmd_post_small text-end">Our team checks it first - you get an e-mail when it is live.</p>
+                    </form>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- /jobs/my. Expects: posts, counts, just_posted, max_open, states -->
+    <template id="my_jobs" name="LLMD: my posted jobs">
+        <t t-call="website.layout">
+            <t t-set="additional_title">My jobs</t>
+            <div id="wrap" class="o_llmd_board o_llmd_post_page">
+                <div class="container o_llmd_post_wrap o_llmd_post_wide">
+                    <div class="o_llmd_post_headrow">
+                        <h1 class="o_llmd_h2">My jobs</h1>
+                        <a href="/jobs/post" class="btn o_llmd_btn_primary"><i class="fa fa-plus" aria-hidden="true"/> Post a job</a>
+                    </div>
+                    <div t-if="just_posted" class="alert alert-success" role="status">Thank you - <b t-out="just_posted.title"/> is sent for review. We publish it after a quick check and send you an e-mail.</div>
+                    <div t-if="not posts" class="o_llmd_empty"><p class="o_llmd_empty_title">No jobs posted yet.</p><p class="mb-0">Post your first job - it's free.</p></div>
+                    <div t-else="" class="o_llmd_my_table">
+                        <div class="o_llmd_my_row o_llmd_my_th"><span>Job</span><span>Status</span><span>Applicants</span><span/></div>
+                        <div t-foreach="posts" t-as="p" class="o_llmd_my_row">
+                            <span class="o_llmd_my_job">
+                                <a t-if="p.post_state == 'live'" t-att-href="p.website_path()" t-out="p.title"/><b t-else="" t-out="p.title"/>
+                                <small><t t-out="p.company"/> · <t t-out="p.location"/><t t-if="p.post_state == 'live' and p.expires_on"> · open until <t t-out="p.expires_on"/></t></small>
+                                <small t-if="p.post_state == 'rejected' and p.reject_reason" class="text-danger">Not published: <t t-out="p.reject_reason"/></small>
+                            </span>
+                            <span><span t-attf-class="o_llmd_state o_llmd_state_#{p.post_state}" t-out="states.get(p.post_state)"/></span>
+                            <span><a t-if="counts.get(p.id)" t-attf-href="/jobs/my/#{p.id}/applicants"><t t-out="counts[p.id]"/> - view</a><t t-else="">0</t></span>
+                            <span class="o_llmd_my_act">
+                                <form t-if="p.post_state == 'live'" method="post" t-attf-action="/jobs/my/#{p.id}/close"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Close job</button></form>
+                                <form t-if="p.post_state == 'closed'" method="post" t-attf-action="/jobs/my/#{p.id}/reopen"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Reopen</button></form>
+                            </span>
+                        </div>
+                    </div>
+                    <p class="o_llmd_post_small">Up to <t t-out="max_open"/> jobs can be pending or live at a time.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- /jobs/my/<id>/applicants. Expects: post, apps, resumes -->
+    <template id="my_applicants" name="LLMD: applicants of my job">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Applicants</t>
+            <div id="wrap" class="o_llmd_board o_llmd_post_page">
+                <div class="container o_llmd_post_wrap o_llmd_post_wide">
+                    <p class="o_llmd_post_nav"><a href="/jobs/my"><i class="fa fa-arrow-left" aria-hidden="true"/> My jobs</a></p>
+                    <h1 class="o_llmd_h2">Applicants - <t t-out="post.title"/></h1>
+                    <div t-if="not apps" class="o_llmd_empty"><p class="o_llmd_empty_title">No applications yet.</p></div>
+                    <div t-else="" class="o_llmd_my_table">
+                        <div class="o_llmd_my_row o_llmd_my_th"><span>Name</span><span>E-mail</span><span>Applied</span><span>Resume</span></div>
+                        <div t-foreach="apps" t-as="a" class="o_llmd_my_row">
+                            <span class="o_llmd_my_job"><b t-out="a.applicant_name"/><small t-if="a.message" t-out="a.message"/></span>
+                            <span><a t-att-href="'mailto:%s' % a.email" t-out="a.email"/></span>
+                            <span t-out="a.application_date" t-options="{'widget': 'date'}"/>
+                            <span><a t-if="resumes.get(a.id)" t-attf-href="/jobs/my/#{post.id}/resume/#{a.id}"><i class="fa fa-download" aria-hidden="true"/> Download</a><t t-else="">-</t></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- /jobs/llmdecode: every live job our team posted. Expects: posts, card_cols -->
+    <template id="llmd_feed" name="LLMD: posted by LLM Decode">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Posted by LLM Decode</t>
+            <div id="wrap" class="o_llmd_board o_llmd_post_page">
+                <div class="container o_llmd_post_wide">
+                    <p class="o_llmd_post_nav"><a href="/jobs"><i class="fa fa-arrow-left" aria-hidden="true"/> Jobs Explorer</a></p>
+                    <h1 class="o_llmd_h2"><i class="fa fa-star o_llmd_pick_star" aria-hidden="true"/> Posted by LLM Decode</h1>
+                    <p class="o_llmd_post_lead">Jobs our team picked and posted for LLM Decode learners.</p>
+                    <div t-if="not posts" class="o_llmd_empty"><p class="o_llmd_empty_title">No jobs here right now.</p><p class="mb-0">New picks are added regularly.</p></div>
+                    <div class="row g-4 o_llmd_grid">
+                        <t t-foreach="posts" t-as="job"><t t-set="matched" t-value="False"/><t t-call="llmd_job_aggregator.job_card"/></t>
+                    </div>
+                </div>
+                <t t-call="llmd_job_aggregator.card_apply_modal"/>
+            </div>
+        </t>
+    </template>
+
+    <!-- Odoo's own sign-up page also asks: job seeker or hiring (saved by controllers/main.py LlmdSignup) -->
+    <template id="signup_role" inherit_id="auth_signup.signup" name="LLMD: sign-up role">
+        <xpath expr="//div[hasclass('field-login')]" position="after">
+            <div t-if="not token" class="mb-3 field-llmd-phone">
+                <label for="llmd_signup_phone" class="form-label">Phone Number</label>
+                <input type="tel" name="llmd_signup_phone" id="llmd_signup_phone" class="form-control" required="required" autocomplete="tel" maxlength="20" inputmode="tel"
+                       placeholder="+91 98xxxxxxxx" t-att-value="request.params.get('llmd_signup_phone')"/>
+            </div>
+            <t t-if="not token" t-call="llmd_job_aggregator.role_fields"><t t-set="rid" t-value="'pg'"/></t>
+        </xpath>
+    </template>
+
+</odoo>

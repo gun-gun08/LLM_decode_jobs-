@@ -809,13 +809,15 @@
     // opens: our form in the window (sent from there, its confirmation shown there), or the employer's page in a new tab. Without the script: the usual login page.
     function initApply() {
         var modal = document.getElementById("llmd_auth");
-        var btn = document.querySelector(".o_llmd_apply_card a.o_llmd_apply");
+        var btn = document.querySelector(".o_llmd_head_apply a.o_llmd_apply, .o_llmd_apply_card a.o_llmd_apply, [data-llmd-auth], [data-llmd-card-apply]");      // Apply Now (a job page, a job card) or "Post a job"
         if (!modal || !btn || modal.getAttribute("data-llmd-ready") || !window.fetch || !window.FormData || !window.DOMParser) {
             return;
         }
         modal.setAttribute("data-llmd-ready", "1");
         var box = modal.querySelector(".o_llmd_auth_box");
         var authStep = modal.querySelector('[data-step="auth"]');
+        var roleStep = modal.querySelector('[data-step="role"]');
+        var csrf = "";
         var applyStep = modal.querySelector('[data-step="apply"]');
         var errBox = modal.querySelector(".o_llmd_auth_err");
         var formHref = modal.getAttribute("data-form");
@@ -870,6 +872,15 @@
             errBox.textContent = text || "";
             errBox.hidden = !text;
         }
+        function fallback(signup, why) {      // the security check failed in this window: the message, then a link to Odoo's own page (same account, comes back here)
+            var page = (signup ? "/web/signup" : "/web/login") + "?redirect=" + encodeURIComponent(internalHref || window.location.pathname);
+            showErr((why || "The security check (reCAPTCHA) did not pass.") + " ");
+            var a = document.createElement("a");
+            a.href = page;
+            a.className = "alert-link";
+            a.textContent = signup ? "Sign up on the full page" : "Sign in on the full page";
+            errBox.appendChild(a);
+        }
         function busy(form, on, label) {
             var b = form.querySelector('[type="submit"]');
             if (b) {
@@ -901,6 +912,7 @@
             }
         }
         function setCsrf(token) {
+            csrf = token || csrf;
             each(modal.querySelectorAll('form.o_llmd_auth_form input[name="csrf_token"]'), function (i) {
                 i.value = token || "";
             });
@@ -911,6 +923,9 @@
             document.documentElement.classList.add("o_llmd_auth_on");
             authStep.hidden = step !== "auth";
             applyStep.hidden = step === "auth";
+            if (roleStep) {
+                roleStep.hidden = true;
+            }
             if (step === "auth") {
                 setTab("login");
             } else {
@@ -926,6 +941,9 @@
         }
         function panel(html) {
             authStep.hidden = true;
+            if (roleStep) {
+                roleStep.hidden = true;
+            }
             applyStep.hidden = false;
             applyStep.innerHTML = html;
             box.scrollTop = 0;
@@ -942,6 +960,54 @@
             var text = welcome;
             welcome = "";
             return text ? '<div class="alert alert-success o_llmd_auth_welcome" role="status"><i class="fa fa-check-circle" aria-hidden="true"></i> ' + esc(text) + "</div>" : "";
+        }
+
+        // signed in: an account without a role is asked once (job seeker or hiring), then goes on
+        function afterAuth(s) {
+            setCsrf(s.csrf_token);      // a sign-in starts a new session: its token, not the one from before
+            if (roleStep && !s.role && !s.internal) {
+                authStep.hidden = true;
+                applyStep.hidden = true;
+                roleStep.hidden = false;
+                roleStep.setAttribute("data-name", s.name || "");
+                box.scrollTop = 0;
+                box.focus();
+                return;
+            }
+            next(s.name);
+        }
+        if (roleStep) {
+            each(roleStep.querySelectorAll('input[name="llmd_role"]'), function (radio) {      // one click on a choice is the answer
+                radio.addEventListener("change", function () {
+                    roleStep.requestSubmit ? roleStep.requestSubmit() : roleStep.dispatchEvent(new Event("submit", { cancelable: true }));
+                });
+            });
+            roleStep.addEventListener("submit", function (ev) {
+                ev.preventDefault();
+                var err = roleStep.querySelector(".o_llmd_role_err");
+                err.hidden = true;
+                busy(roleStep, true, "Saving…");
+                var body = new FormData(roleStep);
+                body.append("csrf_token", csrf);
+                window.fetch("/jobs/auth/role", { method: "POST", body: body, credentials: "same-origin" })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (res) {
+                        busy(roleStep, false);
+                        if (!res.ok) {
+                            err.textContent = res.error || "Please try again.";
+                            err.hidden = false;
+                            return;
+                        }
+                        next(roleStep.getAttribute("data-name"));
+                    })
+                    .catch(function () {
+                        busy(roleStep, false);
+                        err.textContent = "Something went wrong. Please try again.";
+                        err.hidden = false;
+                    });
+            });
         }
 
         // after the sign-in (or for somebody already signed in): the application of this job
@@ -1067,16 +1133,27 @@
                 captchaKey = s.recaptcha_key || "";
                 loadCaptcha().catch(function () {});      // ready before the visitor presses Login
                 if (s.signed_in || !s.login_required) {      // signed in meanwhile (another tab): straight on
-                    next(s.name);
+                    afterAuth(s);
                 }
             }).catch(function () {
                 window.location.href = btn.getAttribute("href");
             });
         }
 
-        btn.addEventListener("click", function (ev) {
+        function onOpen(ev, card) {
             if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) {
                 return;
+            }
+            if (card.hasAttribute("data-llmd-card-apply")) {      // a job card: the window works for THIS job
+                formHref = card.getAttribute("data-form") || "";
+                goHref = card.getAttribute("data-go") || "";
+                btn = card;
+                var line = modal.querySelector(".o_llmd_auth_job");
+                if (line) {
+                    line.innerHTML = "<strong></strong>" + (card.getAttribute("data-company") ? " · " + esc(card.getAttribute("data-company")) : "");
+                    line.querySelector("strong").textContent = card.getAttribute("data-title") || "";
+                    jobLine = line.outerHTML;
+                }
             }
             if (signInFirst) {
                 ev.preventDefault();
@@ -1086,7 +1163,16 @@
                 open("apply");
                 loadForm();
             }      // signed in, employer's page / our position's form: the link as it is
+        }
+        document.addEventListener("click", function (ev) {      // on the whole page: also the cards a "next page" of Latest Jobs brings later
+            var el = ev.target.closest && ev.target.closest(".o_llmd_head_apply a.o_llmd_apply, .o_llmd_apply_card a.o_llmd_apply, [data-llmd-auth], [data-llmd-card-apply]");
+            if (el) {
+                onOpen(ev, el);
+            }
         });
+        if (signInFirst && modal.getAttribute("data-auto") === "1") {      // "Post a job" for a visitor: the window opens by itself
+            startAuth();
+        }
 
         each(modal.querySelectorAll("[data-tab]"), function (t) {
             if (t.tagName === "BUTTON") {
@@ -1139,6 +1225,11 @@
                     form.elements.login.focus();
                     return;
                 }
+                if (signup && form.elements.llmd_signup_phone && !/^\+?[\d\s()-]{7,20}$/.test(form.elements.llmd_signup_phone.value.trim())) {
+                    showErr("Please enter a valid phone number.");
+                    form.elements.llmd_signup_phone.focus();
+                    return;
+                }
                 if (signup) {
                     form.elements.login.value = form.elements.login.value.trim();
                     form.elements.confirm_password.value = form.elements.password.value;      // one password field; Odoo's sign-up checks the pair
@@ -1149,8 +1240,16 @@
                 if (signup) {
                     form.elements.confirm_password.value = "";      // the password is only in the request to Odoo, nowhere else on the page
                 }
-                (signup ? Promise.resolve("") : captcha("login"))      // Odoo checks the token on login (action "login"); its sign-up does not
+                var noToken = false;
+                captcha(signup ? "signup" : "login")      // Odoo 19 checks a token on BOTH: /web/login (action "login") and /web/signup (route captcha="signup")
+                    .catch(function () {
+                        noToken = true;      // Google's script could not be loaded or answered: Odoo's own page is offered below
+                        return "";
+                    })
                     .then(function (token) {
+                        if (noToken && captchaKey) {
+                            throw new Error("captcha");
+                        }
                         if (token) {
                             body.append("recaptcha_token_response", token);
                         }
@@ -1158,7 +1257,7 @@
                     })
                     .then(function (r) {
                         return r.text().then(function (text) {
-                            return { path: pathOf(r.url), text: text };
+                            return { path: pathOf(r.url), text: text, status: r.status };
                         });
                     })
                     .then(function (res) {
@@ -1172,7 +1271,7 @@
                             welcome = signup ? "Your account is created and you are signed in." : "";
                             modal.setAttribute("data-signed-in", "1");
                             signInFirst = false;
-                            next(s.name);
+                            afterAuth(s);
                             return;
                         }
                         if (res.path !== "/web/login" && res.path !== "/web/signup") {      // another step of the sign-in (e.g. two-factor code): that page
@@ -1180,6 +1279,11 @@
                             return;
                         }
                         var doc = parse(res.text);
+                        if (res.status >= 400) {      // Odoo refused the request itself (e.g. the reCAPTCHA check): its own message, and its own sign-in page as a way on
+                            var why = doc.querySelector("#wrap pre");
+                            fallback(signup, why ? why.textContent.trim() : "");
+                            return;
+                        }
                         var alert = doc.querySelector("form .alert-danger, .oe_login_form .alert-danger, .oe_signup_form .alert-danger");
                         var token = doc.querySelector('form input[name="csrf_token"]');
                         if (token) {
@@ -1192,17 +1296,191 @@
                             pw.focus();
                         }
                     })
-                    .catch(function () {
+                    .catch(function (err) {
                         busy(form, false);
+                        if (err && err.message === "captcha") {
+                            fallback(signup, "");
+                            return;
+                        }
                         showErr("Something went wrong. Please try again.");
                     });
             });
         });
     }
 
+    // ---- /jobs/employers: parts of the page come in as they scroll into view ([data-llmd-reveal], a delay per item with data-llmd-delay), the hero numbers
+    // count up to the real value (the value itself is in the page). Without the script, or with "reduce motion", everything simply shows.
+    function initEmployers() {
+        var page = document.querySelector(".o_llmd_emp");
+        if (!page || page.getAttribute("data-llmd-emp")) {      // (data-llmd-ready is the board script's own mark on the same element)
+            return;
+        }
+        page.setAttribute("data-llmd-emp", "1");
+        var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var items = page.querySelectorAll("[data-llmd-reveal]");
+        function countUp(el) {
+            var end = parseInt(el.getAttribute("data-count"), 10);
+            if (!end || still) {
+                return;
+            }
+            var t0 = null;
+            function step(t) {
+                t0 = t0 || t;
+                var k = Math.min((t - t0) / 1400, 1);
+                el.textContent = Math.round(end * (1 - Math.pow(1 - k, 3))).toLocaleString("en-US");
+                if (k < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            }
+            el.textContent = "0";
+            window.requestAnimationFrame(step);
+        }
+        if (still || !("IntersectionObserver" in window)) {
+            return;
+        }
+        page.classList.add("o_llmd_emp_anim");
+        var seen = new window.IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                if (!en.isIntersecting) {
+                    return;
+                }
+                var el = en.target;
+                el.style.transitionDelay = (parseInt(el.getAttribute("data-llmd-delay") || "0", 10) * 90) + "ms";
+                el.classList.add("is-in");
+                each(el.querySelectorAll("[data-count]"), countUp);
+                seen.unobserve(el);
+            });
+        }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
+        each(items, function (el) {
+            seen.observe(el);
+        });
+    }
+
+    // ---- a job's page: the bar with Apply Now once the header has scrolled away, a long description folded (More / Less), Share (the device's own share
+    // sheet, else the link is copied)
+    function initJobPage() {
+        var view = document.querySelector(".o_llmd_view");
+        if (!view || view.getAttribute("data-llmd-job")) {
+            return;
+        }
+        view.setAttribute("data-llmd-job", "1");
+        var bar = view.querySelector(".o_llmd_jbar");
+        var head = view.querySelector(".o_llmd_head");
+        if (bar && head && "IntersectionObserver" in window) {
+            new window.IntersectionObserver(function (entries) {
+                var on = !entries[0].isIntersecting && entries[0].boundingClientRect.top < 0;
+                bar.classList.toggle("is-on", on);
+                bar.setAttribute("aria-hidden", on ? "false" : "true");
+                each(bar.querySelectorAll("a"), function (a) {
+                    a.tabIndex = on ? 0 : -1;
+                });
+            }).observe(head);
+        }
+        var desc = view.querySelector(".o_llmd_jdesc");
+        var more = desc && desc.querySelector(".o_llmd_jdesc_more");
+        if (desc && more && desc.scrollHeight > 640) {
+            desc.classList.add("is-clamped");
+            more.hidden = false;
+            more.addEventListener("click", function () {
+                var open = desc.classList.toggle("is-clamped") === false;
+                more.setAttribute("aria-expanded", open ? "true" : "false");
+                if (!open) {
+                    desc.scrollIntoView({ block: "start" });
+                }
+            });
+        }
+        var share = view.querySelector(".o_llmd_share_btn");
+        if (share) {
+            share.addEventListener("click", function () {
+                var url = new URL(share.getAttribute("data-url"), window.location.href).href;
+                if (navigator.share) {
+                    navigator.share({ title: share.getAttribute("data-title") || document.title, url: url }).catch(function () {});
+                    return;
+                }
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(url).then(function () {
+                        var ok = view.querySelector(".o_llmd_share_ok");
+                        if (ok) {
+                            ok.hidden = false;
+                            window.setTimeout(function () {
+                                ok.hidden = true;
+                            }, 2500);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    // ---- the filters: a long list (cities, skills, companies ...) shows its first six options and a "Show all" button - a checked option always shows
+    function initFilterLists() {
+        each(document.querySelectorAll(".o_llmd_filters .o_llmd_checklist"), function (list) {
+            var items = list.querySelectorAll(".o_llmd_check");
+            if (list.getAttribute("data-llmd-short") || items.length <= 7) {
+                return;
+            }
+            list.setAttribute("data-llmd-short", "1");
+            list.classList.add("is-short");
+            each(items, function (it, i) {
+                if (i >= 6 && !(it.querySelector("input") || {}).checked) {
+                    it.classList.add("o_llmd_more_item");
+                }
+            });
+            var more = document.createElement("button");
+            more.type = "button";
+            more.className = "o_llmd_show_all";
+            more.textContent = "Show all (" + items.length + ")";
+            more.addEventListener("click", function () {
+                var all = list.classList.toggle("is-short") === false;
+                more.textContent = all ? "Show less" : "Show all (" + items.length + ")";
+            });
+            list.parentNode.insertBefore(more, list.nextSibling);
+        });
+    }
+
+    // ---- the results: Grid or List (the choice is kept in this browser), the industries over them: six, then "More…"
+    function initViews() {
+        var cell = document.querySelector(".o_llmd_content .o_llmd_cell");      // the grid of the job cards (not the loading placeholders)
+        var grid = cell && cell.parentNode;
+        var btns = document.querySelectorAll(".o_llmd_viewbtn");
+        if (grid && btns.length) {
+            var saved = "grid";
+            try {
+                saved = window.localStorage.getItem("llmd_view") || "grid";
+            } catch (e) {}
+            var set = function (view) {
+                grid.classList.toggle("o_llmd_listview", view === "list");
+                each(btns, function (b) {
+                    b.setAttribute("aria-pressed", b.getAttribute("data-view") === view ? "true" : "false");
+                });
+                try {
+                    window.localStorage.setItem("llmd_view", view);
+                } catch (e) {}
+            };
+            set(saved);
+            each(btns, function (b) {
+                b.addEventListener("click", function () {
+                    set(b.getAttribute("data-view"));
+                });
+            });
+        }
+        var more = document.querySelector(".o_llmd_cat_more");
+        if (more) {
+            more.addEventListener("click", function () {
+                var box = more.parentNode;
+                var open = box.classList.toggle("is-all");
+                more.firstChild.nodeValue = open ? "Less " : "More… ";
+            });
+        }
+    }
+
     function start() {
+        initViews();
+        initFilterLists();
         init();
         initApply();
+        initEmployers();
+        initJobPage();
     }
 
     if (document.readyState === "loading") {

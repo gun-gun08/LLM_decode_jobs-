@@ -34,9 +34,15 @@ ENDS_IN_NUMBER = re.compile(r'-\d+$')      # Odoo's own position pages are /jobs
 ORDERS = {'jtype': [c for c, _l in F.JOB_TYPES], 'level': [c for c, _l in F.EXP_FILTER], 'category': [c for c, *_x in C.JOB_CATEGORIES],
           'function': [c for c, *_x in C.JOB_FUNCTIONS], 'role': [c for c, *_x in C.ROLES], 'size': [c for c, _l in C.COMPANY_SIZES],
           'salary': [c for c, *_x in F.SALARY_BANDS]}
-EMPTY = {'q': '', 'location': '', 'region': '', 'country': '', 'city': [], 'exp_min': 0, 'exp_max': EXP_MAX, 'category': [], 'function': [], 'role': [], 'skill': [],
+EMPTY = {'q': '', 'location': '', 'region': '', 'country': '', 'city': [], 'exp_min': 0, 'exp_max': EXP_MAX, 'category': [], 'function': [], 'role': [], 'skill': [], 'lang': [],
          'company': [], 'size': [], 'mode': '', 'jtype': [], 'level': [], 'salary': [], 'posted': '', 'track': '', 'sort': ''}
 
+
+
+def lang_parts():
+    """{path part: language} of the Language filter (the languages models/language.py reads from a job's text)."""
+    from . import language as LANG
+    return {text_part(name).lower(): name for name, _rx in LANG.LANGUAGES}
 
 def _ordered(values, key):
     order = ORDERS[key]
@@ -123,6 +129,7 @@ def segments(state, look):
     if s['track']:
         out.append('track-%s' % s['track'])
     out += ['skill-%s' % text_part(k) for k in sorted({F.skill_key(x) for x in s['skill']})]
+    out += ['lang-%s' % text_part(n).lower() for n in sorted(set(s.get('lang') or []))]
     if s['location']:
         out.append('near-%s' % text_part(s['location']))
     if s['q']:
@@ -205,6 +212,8 @@ def parse(parts, look):
             v['track'] = p[6:]
         elif p.startswith('skill-') and p[6:] in look.skills():
             v['skill'].append(look.skills()[p[6:]])
+        elif p.startswith('lang-') and p[5:].lower() in lang_parts() and lang_parts()[p[5:].lower()] not in v['lang']:
+            v['lang'].append(lang_parts()[p[5:].lower()])
         elif p.startswith('near-') and not v['location'] and text_of(p[5:]):
             v['location'] = text_of(p[5:])[:60]
         else:

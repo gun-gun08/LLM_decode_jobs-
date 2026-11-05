@@ -7,3 +7,6 @@ from . import application
 from . import click
 from . import sync
 from . import website_menu
+from . import post
+from . import partner
+from . import plan_request

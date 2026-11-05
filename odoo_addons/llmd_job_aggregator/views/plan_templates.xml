@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- /jobs/plan/<plan>: the request page of a paid plan (Single posting, Hiring pack) - what the plan gives, a short contact form, what happens next.
+         The employer signs in (the window over the page), fills in the company and pays on Odoo's payment page (Razorpay); the credits are added when the
+         payment is done. Expects: plan_code, plan, vals, errors, sent, post_days, signed_in, credits -->
+    <template id="plan_request_page" name="LLMD: plan request">
+        <t t-call="website.layout">
+            <t t-set="additional_title" t-value="plan['name']"/>
+            <div id="wrap" class="o_llmd_board o_llmd_planreq">
+                <div class="o_llmd_planreq_bg" aria-hidden="true"/>
+                <div class="container o_llmd_planreq_in">
+                    <p class="o_llmd_post_nav"><a href="/jobs/employers#plans"><i class="fa fa-arrow-left" aria-hidden="true"/> All plans</a></p>
+                    <div class="o_llmd_planreq_head">
+                        <span t-attf-class="o_llmd_plan_ic o_llmd_planreq_ic o_llmd_planreq_ic_#{plan_code}"><i t-attf-class="fa #{'fa-briefcase' if plan_code == 'bundle' else 'fa-users'}" aria-hidden="true"/></span>
+                        <h1 class="o_llmd_h2">
+                            Post <t t-out="plan['jobs']"/> jobs
+                        </h1>
+                        <p class="o_llmd_planreq_price">₹<t t-out="'{:,}'.format(plan['price'])"/> <small t-out="'for %s jobs' % plan['jobs']"/></p>
+                        <p class="o_llmd_planreq_lead">Once published, your jobs are:</p>
+                        <ul class="o_llmd_planreq_gets">
+                            <li><i class="fa fa-check" aria-hidden="true"/> Checked by our team and live for <t t-out="post_days"/> days</li>
+                            <li><i class="fa fa-check" aria-hidden="true"/> Shown on industry, company and city pages</li>
+                            <li><i class="fa fa-check" aria-hidden="true"/> Matched to the LLM Decode courses that fit them</li>
+                            <li><i class="fa fa-check" aria-hidden="true"/> Applicants and resumes under My jobs, with an e-mail for each</li>
+                        </ul>
+                    </div>
+
+                    <div class="o_llmd_planreq_card">
+                        <t t-if="sent">
+                            <div class="o_llmd_planreq_done">
+                                <span class="o_llmd_planreq_tick"><i class="fa fa-check" aria-hidden="true"/></span>
+                                <h2>Thank you - we have your request</h2>
+                                <p>Our team will contact you by e-mail or phone about the payment and then help you publish your jobs.</p>
+                                <a href="/jobs/employers" class="btn o_llmd_btn_primary">Back to For companies</a>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div t-if="errors.get('form')" class="alert alert-danger" role="alert" t-out="errors['form']"/>
+                            <form method="post" t-attf-action="/jobs/plan/#{plan_code}" class="o_llmd_post_form" novalidate="novalidate">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div style="position: absolute; left: -9999px;" aria-hidden="true"><input type="text" name="company_website" tabindex="-1" autocomplete="off"/></div>
+                                <div class="row g-3">
+                                    <t t-foreach="[('first_name', 'First name', 'text', 'given-name', '', 60, 6), ('last_name', 'Last name', 'text', 'family-name', '', 60, 6),
+                                                   ('email', 'Professional e-mail', 'email', 'email', 'you@company.com', 120, 6), ('phone', 'Phone number', 'tel', 'tel', '+91 98xxxxxxxx', 30, 6),
+                                                   ('company', 'Company name', 'text', 'organization', '', 120, 6), ('company_site', 'Company website', 'text', 'url', 'https://yourcompany.com', 200, 6)]" t-as="f">
+                                        <div t-attf-class="col-md-#{f[6]}">
+                                            <label class="form-label" t-att-for="'r_' + f[0]"><t t-out="f[1]"/> <span class="text-danger">*</span></label>
+                                            <input t-att-id="'r_' + f[0]" t-att-name="f[0]" t-att-type="f[2]" t-att-autocomplete="f[3]" t-att-placeholder="f[4] or None" t-att-maxlength="f[5]"
+                                                   t-attf-class="form-control #{'is-invalid' if errors.get(f[0]) else ''}" t-att-value="vals.get(f[0], '')"/>
+                                            <div t-if="errors.get(f[0])" class="invalid-feedback d-block" t-out="errors[f[0]]"/>
+                                        </div>
+                                    </t>
+                                    <div class="col-12">
+                                        <label class="form-label" for="r_linkedin">Company LinkedIn <span class="text-muted">(optional)</span></label>
+                                        <input id="r_linkedin" name="linkedin" maxlength="200" placeholder="https://linkedin.com/company/..." t-attf-class="form-control #{'is-invalid' if errors.get('linkedin') else ''}" t-att-value="vals.get('linkedin', '')"/>
+                                        <div t-if="errors.get('linkedin')" class="invalid-feedback d-block" t-out="errors['linkedin']"/>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="r_note">Which roles are you hiring for? <span class="text-muted">(optional)</span></label>
+                                        <textarea id="r_note" name="note" rows="3" maxlength="1000" class="form-control" t-out="vals.get('note', '')"/>
+                                    </div>
+                                </div>
+                                <button t-if="signed_in" type="submit" class="btn o_llmd_btn_primary o_llmd_planreq_btn">
+                                    <i class="fa fa-lock" aria-hidden="true"/> Pay ₹<t t-out="'{:,}'.format(plan['price'])"/> and get <t t-out="plan['jobs']"/> jobs
+                                </button>
+                                <a t-else="" t-attf-href="/web/login?redirect=/jobs/plan/#{plan_code}" class="btn o_llmd_btn_primary o_llmd_planreq_btn" data-llmd-auth="1">
+                                    <i class="fa fa-sign-in" aria-hidden="true"/> Sign in to buy <t t-out="plan['jobs']"/> jobs
+                                </a>
+                                <p class="o_llmd_planreq_secure"><i class="fa fa-shield" aria-hidden="true"/> Secure payment by <b>Razorpay</b> - UPI, cards, net banking and wallets</p>
+                                <p t-if="signed_in and credits" class="o_llmd_planreq_have">You have <b t-out="credits"/> job credit<t t-if="credits != 1">s</t> left on your account.</p>
+                            </form>
+                            <div class="o_llmd_planreq_next">
+                                <h3>What happens after your payment?</h3>
+                                <ol>
+                                    <li><t t-out="plan['jobs']"/> job credits are added to your account as soon as the payment is done.</li>
+                                    <li>Post your jobs from <a href="/jobs/post">Post a job</a> - each job uses one credit; we check and publish it.</li>
+                                    <li>Applicants and resumes reach My jobs and your inbox. A job we do not publish gives its credit back.</li>
+                                </ol>
+                                <p>A problem with the payment, or want to see it first? <a href="/contactus">Book a free demo</a>.</p>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+                <div t-if="not signed_in" class="o_llmd_view o_llmd_auth_host"><t t-call="llmd_job_aggregator.auth_modal">
+                    <t t-set="auth_internal" t-value="'/jobs/plan/%s' % plan_code"/>
+                    <t t-set="auth_sign_in" t-value="True"/>
+                    <t t-set="role_default" t-value="'hirer'"/>
+                    <t t-set="auth_line">Sign in to buy a plan</t>
+                    <t t-set="auth_login_title">Sign in to buy a plan</t>
+                    <t t-set="auth_login_btn">Login and continue</t>
+                    <t t-set="auth_signup_btn">Sign up and continue</t>
+                </t></div>
+            </div>
+        </t>
+    </template>
+
+    <!-- backend: Job board > Plan requests -->
+    <record id="llmd_plan_request_list" model="ir.ui.view">
+        <field name="name">llmd.plan.request.list</field>
+        <field name="model">llmd.plan.request</field>
+        <field name="arch" type="xml">
+            <list decoration-info="state == 'new'" decoration-muted="state == 'cancel'" decoration-success="state == 'paid'">
+                <field name="create_date" string="Received"/>
+                <field name="plan"/>
+                <field name="company"/>
+                <field name="first_name"/>
+                <field name="last_name"/>
+                <field name="email"/>
+                <field name="phone"/>
+                <field name="amount" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+    <record id="llmd_plan_request_form" model="ir.ui.view">
+        <field name="name">llmd.plan.request.form</field>
+        <field name="model">llmd.plan.request</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_contacted" type="object" string="Contacted" invisible="state != 'new'" class="btn-primary"/>
+                    <button name="action_paid" type="object" string="Paid (add credits)" invisible="state not in ('new', 'contacted')"
+                            confirm="Mark this plan as paid and add its job credits to the account?"/>
+                    <button name="action_cancel" type="object" string="Cancel" invisible="state in ('paid', 'cancel')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="new,contacted,paid"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Plan">
+                            <field name="plan"/>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                            <field name="jobs"/>
+                            <field name="create_date" string="Received" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                            <field name="transaction_id"/>
+                            <field name="credited"/>
+                            <field name="credits_left"/>
+                        </group>
+                        <group string="Contact">
+                            <field name="first_name"/>
+                            <field name="last_name"/>
+                            <field name="email" widget="email"/>
+                            <field name="phone" widget="phone"/>
+                        </group>
+                        <group string="Company">
+                            <field name="company"/>
+                            <field name="company_site" widget="url"/>
+                            <field name="linkedin" widget="url"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="No message"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="llmd_plan_request_action" model="ir.actions.act_window">
+        <field name="name">Plan requests</field>
+        <field name="res_model">llmd.plan.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No plan requests yet</p><p>Plans bought on the For companies page show here. An online payment (Razorpay) marks them Paid and adds the job credits by itself.</p></field>
+    </record>
+    <menuitem id="llmd_plan_request_menu" name="Plan requests" parent="llmd_job_board_menu" action="llmd_plan_request_action" sequence="13"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+</odoo>

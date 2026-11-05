@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ======= jobs posted on the website itself (models/post.py): Recruitment > Job board > Our posts / Employer posts ======= -->
+    <record id="llmd_job_post_list" model="ir.ui.view">
+        <field name="name">llmd.job.listing.post.list</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="post_state in ('closed', 'rejected')" decoration-warning="post_state == 'pending'">
+                <field name="pinned" widget="boolean_toggle" column_invisible="context.get('default_post_kind') != 'llmdecode'"/>
+                <field name="title"/>
+                <field name="company"/>
+                <field name="location"/>
+                <field name="poster_id" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
+                <field name="contact_email" optional="hide"/>
+                <field name="apply_how" optional="show"/>
+                <field name="posted"/>
+                <field name="expires_on"/>
+                <field name="post_state" widget="badge" decoration-success="post_state == 'live'" decoration-warning="post_state == 'pending'" decoration-danger="post_state == 'rejected'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_job_post_form" model="ir.ui.view">
+        <field name="name">llmd.job.listing.post.form</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve" type="object" string="Approve and publish" class="btn-primary" invisible="post_state not in ('pending', 'rejected')"/>
+                    <button name="action_reject" type="object" string="Reject" invisible="post_kind != 'employer' or post_state not in ('pending', 'live')"
+                            confirm="Reject this job? The employer gets an e-mail (with the reason, if you wrote one)."/>
+                    <button name="action_close" type="object" string="Close" invisible="post_state != 'live'"/>
+                    <button name="action_reopen" type="object" string="Reopen" invisible="post_state != 'closed'"/>
+                    <field name="post_state" widget="statusbar" statusbar_visible="pending,live,closed"/>
+                </header>
+                <sheet>
+                    <field name="post_kind" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                    <div class="alert alert-warning" role="status" invisible="post_state != 'pending'">
+                        Posted by an employer on the website: check it (real company, real job, no fees asked from candidates) before you approve it.
+                    </div>
+                    <group>
+                        <group string="Job">
+                            <field name="title"/>
+                            <field name="company"/>
+                            <field name="location"/>
+                            <field name="work_mode" placeholder="remote / hybrid / onsite"/>
+                            <field name="job_type" placeholder="fulltime / parttime / internship"/>
+                            <field name="exp_level" placeholder="fresher / entry / mid / senior"/>
+                            <field name="post_department"/>
+                            <field name="salary"/>
+                        </group>
+                        <group string="Applying and showing">
+                            <field name="apply_how"/>
+                            <field name="jd_url" widget="url" invisible="not jd_url"/>
+                            <field name="jd_attachment_id" invisible="not jd_attachment_id"/>
+                            <field name="apply_url" widget="url" invisible="apply_how != 'link'" required="apply_how == 'link'"/>
+                            <field name="pinned" invisible="post_kind != 'llmdecode'"/>
+                            <field name="expires_on"/>
+                            <field name="posted" readonly="1"/>
+                            <field name="page_url" widget="url" readonly="1" invisible="not active"/>
+                        </group>
+                        <group string="Employer" invisible="post_kind != 'employer'">
+                            <field name="poster_id"/>
+                            <field name="contact_email"/>
+                            <field name="reject_reason" placeholder="Shown to the employer when you reject"/>
+                        </group>
+                    </group>
+                    <separator string="Description"/>
+                    <field name="description_html" placeholder="About the role, responsibilities, requirements ..."/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_job_post_search" model="ir.ui.view">
+        <field name="name">llmd.job.listing.post.search</field>
+        <field name="model">llmd.job.listing</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="title"/>
+                <field name="company"/>
+                <field name="poster_id"/>
+                <filter name="pending" string="Pending review" domain="[('post_state', '=', 'pending')]"/>
+                <filter name="live" string="Live" domain="[('post_state', '=', 'live')]"/>
+                <filter name="closed" string="Closed / rejected" domain="[('post_state', 'in', ('closed', 'rejected'))]"/>
+                <group>
+                    <filter name="by_state" string="Status" context="{'group_by': 'post_state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_job_post_llmd_action" model="ir.actions.act_window">
+        <field name="name">Our posts</field>
+        <field name="res_model">llmd.job.listing</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('post_kind', '=', 'llmdecode')]</field>
+        <field name="context">{'default_post_kind': 'llmdecode', 'default_apply_how': 'form', 'active_test': False}</field>
+        <field name="search_view_id" ref="llmd_job_post_search"/>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_job_post_list')}), (0, 0, {'view_mode': 'form', 'view_id': ref('llmd_job_post_form')})]"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Post a job for LLM Decode learners</p><p>It goes live at once in "Posted by LLM Decode" on the Jobs page, for 30 days.</p></field>
+    </record>
+
+    <record id="llmd_job_post_employer_action" model="ir.actions.act_window">
+        <field name="name">Employer posts</field>
+        <field name="res_model">llmd.job.listing</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('post_kind', '=', 'employer')]</field>
+        <field name="context">{'active_test': False, 'search_default_pending': 1, 'create': False}</field>
+        <field name="search_view_id" ref="llmd_job_post_search"/>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_job_post_list')}), (0, 0, {'view_mode': 'form', 'view_id': ref('llmd_job_post_form')})]"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No employer posts to review</p><p>Employers post on the website (Jobs page > Post a job). Their jobs wait here until you approve them.</p></field>
+    </record>
+
+    <menuitem id="llmd_job_post_llmd_menu" name="Our posts" parent="llmd_job_board_menu" action="llmd_job_post_llmd_action" sequence="5"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+    <menuitem id="llmd_job_post_employer_menu" name="Employer posts" parent="llmd_job_board_menu" action="llmd_job_post_employer_action" sequence="10"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+
+    <!-- "Hire Talent" next to Jobs in the website menu (models/website_menu.py; added once per website, never twice) -->
+    <function model="website.menu" name="_llmd_ensure_hire_menu"/>
+
+    <!-- ======= the companies of the board: what their page shows besides the jobs (description, industry, website, LinkedIn) ======= -->
+    <record id="llmd_company_list" model="ir.ui.view">
+        <field name="name">llmd.company.list</field>
+        <field name="model">llmd.company</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0" editable="bottom">
+                <header>
+                    <button name="action_find_linkedin" type="object" string="Find LinkedIn" help="Reads each selected company's website and takes the LinkedIn page it links to."/>
+                </header>
+                <field name="name" readonly="1"/>
+                <field name="job_count"/>
+                <field name="industry"/>
+                <field name="website" widget="url"/>
+                <field name="linkedin" widget="url"/>
+                <field name="description" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_company_form" model="ir.ui.view">
+        <field name="name">llmd.company.form</field>
+        <field name="model">llmd.company</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0">
+                <header>
+                    <button name="action_find_linkedin" type="object" string="Find LinkedIn from the website" class="btn-primary" invisible="not website or linkedin"
+                            help="Reads the company website and takes the LinkedIn company page it links to."/>
+                </header>
+                <sheet>
+                    <h1><field name="name" readonly="1"/></h1>
+                    <group>
+                        <group>
+                            <field name="industry" placeholder="IT Services &amp; Consulting"/>
+                            <field name="website" widget="url" placeholder="https://www.example.com"/>
+                            <field name="linkedin" widget="url" placeholder="https://www.linkedin.com/company/..."/>
+                        </group>
+                        <group>
+                            <field name="job_count"/>
+                            <field name="slug" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="About the company (shown on its page)"/>
+                    <field name="description" placeholder="Only facts you know - from the company itself."/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_company_action" model="ir.actions.act_window">
+        <field name="name">Companies</field>
+        <field name="res_model">llmd.company</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No companies yet</p><p>The companies come from the jobs. Add a description, industry, website and LinkedIn: their page on the website shows them.</p></field>
+    </record>
+
+    <!-- the known companies get their website, one line and LinkedIn (models/company_info.py) where the backend has nothing yet -->
+    <function model="llmd.company" name="_llmd_fill_known"/>
+
+    <menuitem id="llmd_company_menu" name="Companies" parent="llmd_job_board_menu" action="llmd_company_action" sequence="15"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+
+    <function model="llmd.job.listing" name="_llmd_fix_post_places"/>
+
+    <record id="ir_cron_expire_job_posts" model="ir.cron">
+        <field name="name">LLMD: close job posts that are past their "Open until" day</field>
+        <field name="model_id" ref="model_llmd_job_listing"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_expire_posts()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <!-- ======= the people who hire (models/partner.py): their contact with the company details they gave at the sign-up ======= -->
+    <record id="llmd_employer_list" model="ir.ui.view">
+        <field name="name">res.partner.llmd.employer.list</field>
+        <field name="model">res.partner</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list create="0">
+                <field name="name"/>
+                <field name="email"/>
+                <field name="company_name" string="Company"/>
+                <field name="function" string="Designation"/>
+                <field name="website" widget="url" optional="show"/>
+                <field name="llmd_linkedin" widget="url" optional="hide"/>
+                <field name="phone" optional="show"/>
+                <field name="llmd_post_count"/>
+                <field name="llmd_role" optional="hide"/>
+                <field name="llmd_role_date" string="Joined as hirer"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_employer_form" model="ir.ui.view">
+        <field name="name">res.partner.llmd.employer.form</field>
+        <field name="model">res.partner</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_llmd_posts" type="object" class="oe_stat_button" icon="fa-briefcase">
+                            <field name="llmd_post_count" widget="statinfo" string="Jobs posted"/>
+                        </button>
+                    </div>
+                    <h1><field name="name" readonly="1"/></h1>
+                    <group>
+                        <group>
+                            <field name="email" readonly="1"/>
+                            <field name="phone"/>
+                            <field name="llmd_role"/>
+                            <field name="llmd_role_date"/>
+                        </group>
+                        <group>
+                            <field name="company_name" string="Company"/>
+                            <field name="function" string="Designation"/>
+                            <field name="website" widget="url"/>
+                            <field name="llmd_linkedin" widget="url"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_employer_search" model="ir.ui.view">
+        <field name="name">res.partner.llmd.employer.search</field>
+        <field name="model">res.partner</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="email"/>
+                <field name="company_name" string="Company"/>
+                <filter name="hirers" string="Hiring" domain="[('llmd_role', '=', 'hirer')]"/>
+                <filter name="seekers" string="Job seekers" domain="[('llmd_role', '=', 'applicant')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_employer_action" model="ir.actions.act_window">
+        <field name="name">Employers</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('llmd_role', '!=', False)]</field>
+        <field name="context">{'search_default_hirers': 1, 'create': False}</field>
+        <field name="search_view_id" ref="llmd_employer_search"/>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_employer_list')}), (0, 0, {'view_mode': 'form', 'view_id': ref('llmd_employer_form')})]"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No employers yet</p><p>People who choose "Hiring (Employer / HR)" when they sign up on the job board appear here, with their company details.</p></field>
+    </record>
+
+    <menuitem id="llmd_employer_menu" name="Employers" parent="llmd_job_board_menu" action="llmd_employer_action" sequence="12"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+</odoo>

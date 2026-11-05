@@ -29,6 +29,7 @@ SYNC_LOCK = 72940011                                  # PostgreSQL advisory lock
 SYNC_BATCH_SIZE = 3                                   # company job boards per scheduled run (llmd_agg.sync_batch_size): about a minute, far below any time limit
 SYNC_BATCH_TRIES = 2                                  # a batch the server stopped this often (never finished) is skipped, so one slow board cannot halt the whole sync
 _BATCH_RUNS = set()                                   # (cron id, run end time) of the scheduled runs that already did their batch (one batch per run)
+OWN_SOURCES = ('test', 'llmdecode', 'employer')        # jobs no sync brings (tests, and the jobs posted on the website itself - models/post.py): a sync never hides them
 
 # kept for the older imports of the controller / tests
 TRACKS = C.TRACKS
@@ -529,6 +530,12 @@ class LlmdJobListing(models.Model):
             return '%d+ yrs' % self.exp_years_min
         return '%d–%d yrs' % (self.exp_years_min, self.exp_years_max)
 
+    def more_places(self):
+        """How many more countries the job is open to besides the one its location names ("+2" on the card), 0 when one."""
+        self.ensure_one()
+        names = {c.strip() for c in (self.countries or '').replace(';', ',').split(',') if c.strip()}
+        return max(len(names) - 1, 0)
+
     def card_skills(self, limit=3):
         """(skills, how many more) of a job card: the first skills of its summary."""
         self.ensure_one()
@@ -658,7 +665,28 @@ class LlmdJobListing(models.Model):
             'company_href': self.company_link(), 'years': self.years_label(),
             'links': self.filter_links(),
             'region': self.region_label or '', 'languages': self.language_tags(), 'title_lang': self.title_lang(), 'source_lang': self.source_lang or '', 'company_hq': self.company_hq or '',
+            **self._detail_extra(),
         }
+
+    def _detail_extra(self):
+        """The parts of the Jobgether-like detail page: qualifications and responsibilities (the job's own parsed lists), the facts, the soft skills, the roles,
+        and the company card (its record: industry, size, line, website / LinkedIn - nothing invented)."""
+        self.ensure_one()
+        sec = self.sections()
+        co = self.company_id
+        card = {}
+        if co:
+            card = {'name': co.name, 'initial': (co.name or '?').strip()[:1].upper(), 'href': co.website_path(), 'industry': co.industry or self.category_label or '',
+                    'size': co.size_label(), 'hq': co.hq() or '', 'description': co.description or '', 'website': valid_url(co.website or ''),
+                    'linkedin': valid_url(co.linkedin or '') or co.linkedin_search(), 'linkedin_direct': bool(valid_url(co.linkedin or '')), 'jobs': co.job_count}
+        return {'quals': [q for q in (sec.get('quals') or []) + (sec.get('experience') or []) if q][:6], 'duties': [x for x in sec.get('duties') or [] if x][:6],
+                'soft_skills': self.soft_skill_ids.mapped('name')[:6], 'role_list': self.role_labels()[:3], 'work_mode_label': F.MODE_LABELS.get(self.work_mode, ''),
+                'type_label': F.TYPE_LABELS.get(self.job_type, ''), 'company_card': card, 'share_url': self.website_path()}
+
+    @api.model
+    def apply_sign_in(self):
+        """For the job cards of a list: Apply Now opens the sign-in window first (a visitor, and the sign-in is asked)."""
+        return self._sign_in_vals(True)['sign_in']
 
     @api.model
     def _sign_in_vals(self, can_apply):
@@ -698,8 +726,8 @@ class LlmdJobListing(models.Model):
 
     # ------------------------------------------------------------------ fetching
     @api.model
-    def _prepare(self, job):
-        """A normalized job from a source -> the values to store, or None when it is not about any course or role."""
+    def _prepare(self, job, keep=False):
+        """A normalized job from a source -> the values to store, or None when it is not about any course or role (`keep`: a job posted on the website, stored anyway)."""
         title = (job.get('title') or '').strip()
         ext_id = (job.get('ext_id') or '').strip()
         if not title or not ext_id:
@@ -708,7 +736,7 @@ class LlmdJobListing(models.Model):
         plain = P.plain_text(raw)
         roles = C.role_codes(title)
         tracks = track_codes(title, plain)
-        if not roles and not tracks and not C.board_relevant(title, job.get('categories') or ''):
+        if not keep and not roles and not tracks and not C.board_relevant(title, job.get('categories') or ''):
             return None                                                 # the search returned it, but it fits no course role and no job category
         parsed = P.parse_listing(raw, job.get('company'), title, strict=False) if job.get('full_text') else P.parse_snippet(plain, job.get('company'), title, strict=False)
         order = [c for c, _l, _r in C.TRACKS]
@@ -858,7 +886,7 @@ class LlmdJobListing(models.Model):
             current = {s.name for s in sources if s.code != 'himalayas' or himalayas_used}
             cutoff = now - timedelta(days=C.KEEP_DAYS)
             kept_keys = {vals['dedupe_key'] for vals in unique}
-            stale = self.browse([r.id for k, r in existing.items() if k not in kept and r.active and r.source != 'test'
+            stale = self.browse([r.id for k, r in existing.items() if k not in kept and r.active and r.source not in OWN_SOURCES
                                  and (r.source not in current or not r.fetched_at or r.fetched_at < cutoff or r.dedupe_key in kept_keys or k in merged)])
             stale.write({'active': False})
         # a job the company has closed (its own board answered in full and no longer lists it) goes at once, so that Apply Now never opens a closed job;
@@ -873,7 +901,7 @@ class LlmdJobListing(models.Model):
         closed.write({'active': False})
         stale |= closed
         if direct_only:                                                     # always, even in a run without jobs: no visible job may open a job board's page
-            board = self.search([('active', '=', True), ('source', '!=', 'test')]).filtered(lambda r: r.source in off.mapped('name') or is_board_link(r.apply_url))
+            board = self.search([('active', '=', True), ('source', 'not in', OWN_SOURCES)]).filtered(lambda r: r.source in off.mapped('name') or is_board_link(r.apply_url))
             board.write({'active': False})
             stale |= board
         stats = {'created': created, 'updated': updated, 'hidden': len(stale), 'closed': len(closed), 'duplicates_removed': len(prepared) - len(unique), 'per_source': per_source, 'errors': len(errors),

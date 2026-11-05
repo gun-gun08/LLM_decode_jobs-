@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- /jobs/employers (and /jobs/post for a visitor): the page for companies - why post here, how it works, the plan, real numbers, questions.
+         Every number is counted from the stored jobs; nothing is claimed that the board does not do (no reviews, no outside promotion, no AI screening).
+         A visitor's "Post a job" opens the same sign-in / sign-up window as Apply Now ("Employer / HR" chosen), then the form; a signed-in account goes
+         straight to the form. Expects: signed_in, is_hirer, open_jobs, company_total, category_total, max_open, post_days -->
+    <template id="employers_page" name="LLMD: for companies">
+        <t t-call="website.layout">
+            <t t-set="additional_title">For companies - post a job</t>
+            <t t-set="cta_href" t-value="'/jobs/post' if signed_in else '/web/login?redirect=/jobs/post'"/>
+            <div id="wrap" class="o_llmd_board o_llmd_emp">
+
+                <!-- hero: the promise on the left (big title, the key words in bold, two buttons, the board's real numbers), on the right an illustration:
+                     one applicant card in the middle and the course areas of LLM Decode learners floating around it (no real person, no made-up numbers) -->
+                <section class="o_llmd_lhero o_llmd_emp_hero">
+                    <div class="o_llmd_hero_bg" aria-hidden="true"><span class="o_llmd_blob o_llmd_blob_1"/><span class="o_llmd_blob o_llmd_blob_2"/><span class="o_llmd_blob o_llmd_blob_3"/></div>
+                    <div class="container o_llmd_emp_hero_in">
+                        <div class="o_llmd_emp_hero_text" data-llmd-reveal="up">
+                            <span class="o_llmd_eyebrow"><i class="fa fa-building-o" aria-hidden="true"/> For companies and HR</span>
+                            <h1 class="o_llmd_h1 o_llmd_emp_title">The free hiring platform for <span class="o_llmd_accent o_llmd_hero_word">job&#8209;ready talent.<svg class="o_llmd_hero_swoosh" viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true"><path d="M4 13 C 70 3, 160 3, 296 9"/></svg><i class="o_llmd_hero_spark fa fa-star" aria-hidden="true"/></span></h1>
+                            <p class="o_llmd_emp_lead"><b>Post jobs for free</b>, reach <b>LLM Decode learners</b> trained in <b>AI, sales, marketing and data</b>, and get every <b>application and resume</b> in one place.</p>
+                            <p class="o_llmd_emp_lead">Everything you need to <b>hire fast</b>, without extra tools.</p>
+                            <div class="o_llmd_emp_ctas">
+                                <a t-att-href="cta_href" class="btn o_llmd_btn_primary o_llmd_emp_go o_llmd_shine" data-llmd-auth="1">Post a job - free <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                                <a href="#plans" class="btn o_llmd_btn_ghost o_llmd_emp_ghost">See plans and features <i class="fa fa-arrow-down" aria-hidden="true"/></a>
+                            </div>
+                            <ul class="o_llmd_emp_mini" aria-label="The job board today">
+                                <li><b><span t-att-data-count="open_jobs" t-out="'{:,}'.format(open_jobs)"/>+</b> open jobs</li>
+                                <li><b><span t-att-data-count="company_total" t-out="'{:,}'.format(company_total)"/>+</b> companies hiring</li>
+                                <li><b><span t-att-data-count="category_total" t-out="category_total"/>+</b> industries</li>
+                            </ul>
+                            <p class="o_llmd_emp_note"><i class="fa fa-check-circle" aria-hidden="true"/> First job free · <a t-if="signed_in and is_hirer" href="/jobs/my">Go to My jobs</a><t t-else="">every job checked by our team</t></p>
+                        </div>
+                        <div class="o_llmd_emp_art o_llmd_art_mapmode" aria-hidden="true" data-llmd-reveal="right" data-llmd-delay="2">
+                            <link t-if="map_flag_font" rel="stylesheet" t-att-href="map_flag_font"/>
+                            <img class="o_llmd_art_world" src="/llmd_job_aggregator/static/src/img/world_map.svg" alt="" loading="lazy"/>
+                            <span t-foreach="map_pins" t-as="pin" t-attf-class="o_llmd_mpin o_llmd_mpin_#{pin_index}" t-attf-style="left: #{pin['x']}%; top: #{pin['y']}%;">
+                                <span class="o_llmd_mpin_row"><i class="fa fa-user"/><span class="o_llmd_mpin_flag" t-out="pin['flag']"/></span>
+                                <small t-out="'{:,} jobs'.format(pin['n'])"/>
+                            </span>
+                            <div class="o_llmd_art_card o_llmd_art_profile">
+                                <span class="o_llmd_art_bigav"><i class="fa fa-user"/></span>
+                                <div class="o_llmd_art_ptitle"><b>Your next hire</b><small>Applied for your job</small><span class="o_llmd_art_match"><i class="fa fa-graduation-cap"/> Course match</span></div>
+                                <p class="o_llmd_art_plabel">Summary</p>
+                                <span class="o_llmd_art_line o_llmd_art_w90"/><span class="o_llmd_art_line o_llmd_art_w80"/><span class="o_llmd_art_line o_llmd_art_w60"/>
+                                <p class="o_llmd_art_prow"><b>Skills</b><span>AI</span><span>Sales</span><span>Data</span></p>
+                                <p class="o_llmd_art_prow"><b>Location</b><i class="o_llmd_art_pline"/></p>
+                                <p class="o_llmd_art_prow"><b>Languages</b><i class="o_llmd_art_pline o_llmd_art_pline_s"/></p>
+                                <p class="o_llmd_art_pfoot"><span><i class="fa fa-file-pdf-o"/> Resume</span><span class="o_llmd_art_btn">View <i class="fa fa-arrow-right"/></span></p>
+                            </div>
+                            <div class="o_llmd_art_mini o_llmd_art_bell">
+                                <span class="o_llmd_art_mini_ic o_llmd_ic_amber"><i class="fa fa-bell"/></span>
+                                <div><b>New application</b><small>E-mail sent to you</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- why: six plain points -->
+                <section class="o_llmd_lsec">
+                    <div class="container">
+                        <div class="o_llmd_lhead o_llmd_emp_center" data-llmd-reveal="up">
+                            <h2 class="o_llmd_h2">Why companies post on LLM Decode</h2>
+                            <p>One simple place to reach candidates who learned the skills your role needs.</p>
+                        </div>
+                        <ul class="o_llmd_emp_checks">
+                            <li data-llmd-reveal="up" data-llmd-delay="0"><i class="fa fa-check" aria-hidden="true"/><span><b>No posting fee.</b> Posting a job costs nothing.</span></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="1"><i class="fa fa-check" aria-hidden="true"/><span><b>Trained candidates.</b> LLM Decode learners study AI, sales, marketing and data.</span></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="2"><i class="fa fa-check" aria-hidden="true"/><span><b>No extra tools.</b> Applicants and resumes wait on your own My jobs page.</span></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="3"><i class="fa fa-check" aria-hidden="true"/><span><b>A board people trust.</b> Our team checks every job before it goes live.</span></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="4"><i class="fa fa-check" aria-hidden="true"/><span><b>Seen in more places.</b> Your job also shows on its industry, company and city pages.</span></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="5"><i class="fa fa-check" aria-hidden="true"/><span><b>Any way of working.</b> On-site, hybrid or remote; full-time, part-time or internship.</span></li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- what you get: four cards -->
+                <section class="o_llmd_lsec o_llmd_emp_tint">
+                    <div class="container">
+                        <div class="o_llmd_lhead o_llmd_emp_center" data-llmd-reveal="up">
+                            <h2 class="o_llmd_h2">Everything for your hire, in one place</h2>
+                        </div>
+                        <div class="o_llmd_emp_cards">
+                            <div class="o_llmd_emp_card" data-llmd-reveal="up" data-llmd-delay="0"><span class="o_llmd_emp_ic"><i class="fa fa-pencil-square-o" aria-hidden="true"/></span><h3>Post in minutes</h3><p>One short form: your company, then the role. Your company is filled in from your account.</p></div>
+                            <div class="o_llmd_emp_card" data-llmd-reveal="up" data-llmd-delay="1"><span class="o_llmd_emp_ic"><i class="fa fa-graduation-cap" aria-hidden="true"/></span><h3>Matched to courses</h3><p>Your job is matched to the LLM Decode courses whose learners fit it, so the right people find it.</p></div>
+                            <div class="o_llmd_emp_card" data-llmd-reveal="up" data-llmd-delay="2"><span class="o_llmd_emp_ic"><i class="fa fa-inbox" aria-hidden="true"/></span><h3>Applicants and resumes</h3><p>Name, e-mail, message and resume of every application under My jobs - and an e-mail for each new one.</p></div>
+                            <div class="o_llmd_emp_card" data-llmd-reveal="up" data-llmd-delay="3"><span class="o_llmd_emp_ic"><i class="fa fa-link" aria-hidden="true"/></span><h3>Or your careers page</h3><p>Prefer your own site? Add its link and Apply Now sends candidates there.</p></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- how it works: three steps -->
+                <section class="o_llmd_lsec" id="how">
+                    <div class="container">
+                        <div class="o_llmd_lhead o_llmd_emp_center" data-llmd-reveal="up">
+                            <h2 class="o_llmd_h2">How it works</h2>
+                        </div>
+                        <div class="o_llmd_emp_how o_llmd_how_one">
+                        <div class="o_llmd_how_side" data-llmd-reveal="right">
+                        <img class="o_llmd_how_illus" src="/llmd_job_aggregator/static/src/img/how_it_works.svg?v=3" alt="" aria-hidden="true" loading="lazy"/>
+                        <ol class="o_llmd_emp_steps o_llmd_steps2">
+                            <li data-llmd-reveal="up" data-llmd-delay="0"><span class="o_llmd_emp_num"><i class="fa fa-user-plus" aria-hidden="true"/></span>
+                                <div><small class="o_llmd_step_n">Step 1</small><h3>Create your company account</h3><p>Sign up as "Employer / HR". Your company, designation, website and phone go in with your first job.</p></div></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="1"><span class="o_llmd_emp_num"><i class="fa fa-pencil-square-o" aria-hidden="true"/></span>
+                                <div><small class="o_llmd_step_n">Step 2</small><h3>Post your job</h3><p>Tell us about the role - a PDF, a link or a few lines. It waits as "Pending review" under My jobs.</p></div></li>
+                            <li data-llmd-reveal="up" data-llmd-delay="2"><span class="o_llmd_emp_num"><i class="fa fa-rocket" aria-hidden="true"/></span>
+                                <div><small class="o_llmd_step_n">Step 3</small><h3>Go live and get applicants</h3><p>After our check the job is live for <t t-out="post_days"/> days. Applications and resumes reach My jobs and your inbox.</p></div></li>
+                        </ol>
+                        </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- plans: three cards - Free (one job), Rs 1,000 per job, Rs 5,000 for up to max_open open jobs. A demo call is in the last section. -->
+                <section class="o_llmd_lsec o_llmd_emp_tint o_llmd_plans_sec" id="plans">
+                    <span class="o_llmd_plans_blob o_llmd_plans_blob1" aria-hidden="true"/><span class="o_llmd_plans_blob o_llmd_plans_blob2" aria-hidden="true"/>
+                    <div class="container">
+                        <div class="o_llmd_lhead o_llmd_plans_head" data-llmd-reveal="up">
+                            <span class="o_llmd_plans_kicker"><i class="fa fa-tags" aria-hidden="true"/> Plans</span>
+                            <h2 class="o_llmd_h2">Start free. Grow when you need to.</h2>
+                            <p class="o_llmd_emp_plans_sub">Every job is checked by our team, shown across the board and matched to LLM Decode courses. Applicants and resumes are managed on your My jobs page.</p>
+                        </div>
+                        <div class="o_llmd_emp_plans o_llmd_emp_plans3 o_llmd_plans2">
+                            <div class="o_llmd_emp_plan o_llmd_plan_free" data-llmd-reveal="up" data-llmd-delay="0">
+                                <span class="o_llmd_plan_ic"><i class="fa fa-paper-plane" aria-hidden="true"/></span>
+                                <h3>Free</h3>
+                                <p class="o_llmd_plan_for">Try it with your first job</p>
+                                <p class="o_llmd_emp_price">₹0 <small>1 job</small></p>
+                                <ul>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Live on the board for <t t-out="post_days"/> days</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Shown on industry, company and city pages</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Applicants and resumes under My jobs</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> E-mail for every new application</li>
+                                </ul>
+                                <a t-att-href="cta_href" class="btn o_llmd_btn_primary" data-llmd-auth="1">Post for free</a>
+                            </div>
+                            <div class="o_llmd_emp_plan o_llmd_plan_one" data-llmd-reveal="up" data-llmd-delay="1">
+                                <span class="o_llmd_emp_badge">Recommended</span>
+                                <span class="o_llmd_plan_ic"><i class="fa fa-briefcase" aria-hidden="true"/></span>
+                                <h3>Bundle of 3</h3>
+                                <p class="o_llmd_plan_for">For a few more roles</p>
+                                <p class="o_llmd_emp_price">₹1,000 <small>for 3 jobs</small></p>
+                                <ul>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Everything in Free</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Use them across several roles</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Close or reopen any job from My jobs</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Apply on our form or your own page</li>
+                                </ul>
+                                <a href="/jobs/plan/bundle" class="btn o_llmd_btn_primary">Post 3 jobs</a>
+                            </div>
+                            <div class="o_llmd_emp_plan o_llmd_plan_team" data-llmd-reveal="up" data-llmd-delay="2">
+                                <span class="o_llmd_plan_ic"><i class="fa fa-users" aria-hidden="true"/></span>
+                                <h3>Hiring pack</h3>
+                                <p class="o_llmd_plan_for">For teams hiring for several roles</p>
+                                <p class="o_llmd_emp_price">₹5,000 <small>up to <t t-out="max_open"/> jobs</small></p>
+                                <ul>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Everything in Bundle of 3</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Use it across roles and cities</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> All applicants in one My jobs page</li>
+                                    <li><i class="fa fa-check" aria-hidden="true"/> Help from the LLM Decode team</li>
+                                </ul>
+                                <a href="/jobs/plan/pack" class="btn o_llmd_btn_primary">Post <t t-out="max_open"/> jobs</a>
+                            </div>
+                        </div>
+                        <p class="o_llmd_plans_note" data-llmd-reveal="up"><i class="fa fa-calendar" aria-hidden="true"/> Need more jobs or want to see it first? <a href="/contactus">Book a free demo</a></p>
+                    </div>
+                </section>
+
+                <!-- questions -->
+                <section class="o_llmd_lsec">
+                    <div class="container o_llmd_emp_narrow">
+                        <div class="o_llmd_faq" data-llmd-reveal="up">
+                            <h2 class="o_llmd_h2">Questions</h2>
+                            <details class="o_llmd_faq_item"><summary>What does it cost? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Your first job is free. After that it is ₹1,000 for 3 jobs, or ₹5,000 for up to <t t-out="max_open"/> jobs. Need more, or want to see it first? Book a free demo.</p></details>
+                            <details class="o_llmd_faq_item"><summary>Why is my job checked first? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>So that every job on the board is a real job from a real company. You get an e-mail when it is live - or the reason when it is not.</p></details>
+                            <details class="o_llmd_faq_item"><summary>Where do I see the applicants? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Under My jobs: every application with the name, e-mail, message and resume. You also get an e-mail for each new one.</p></details>
+                            <details class="o_llmd_faq_item"><summary>Can people apply on our own careers page? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Yes. Choose "On my own application page" and add its link: Apply Now then opens your page.</p></details>
+                            <details class="o_llmd_faq_item"><summary>How long does a job stay open? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p><t t-out="post_days"/> days after it goes live. Close it earlier, or reopen it, from My jobs.</p></details>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- last call -->
+                <section class="o_llmd_emp_final">
+                    <div class="container o_llmd_emp_final_in" data-llmd-reveal="zoom">
+                        <h2 class="o_llmd_h2">Ready to hire?</h2>
+                        <p>See how it works on a free call with our team.</p>
+                        <a href="/contactus" class="btn o_llmd_btn_primary"><i class="fa fa-calendar" aria-hidden="true"/> Book a free demo <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                    </div>
+                </section>
+
+                <div t-if="not signed_in" class="o_llmd_view o_llmd_auth_host"><t t-call="llmd_job_aggregator.auth_modal">
+                    <t t-set="auth_internal" t-value="'/jobs/post'"/>
+                    <t t-set="auth_sign_in" t-value="True"/>
+                    <t t-set="role_default" t-value="'hirer'"/>
+                    <t t-set="auth_line">Post a job for free</t>
+                    <t t-set="auth_login_title">Sign in to post a job</t>
+                    <t t-set="auth_login_btn">Login and continue</t>
+                    <t t-set="auth_signup_btn">Sign up and continue</t>
+                </t></div>
+            </div>
+        </t>
+    </template>
+</odoo>

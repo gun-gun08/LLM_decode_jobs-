@@ -6,6 +6,15 @@
          and on the right one sticky Apply Now card -> Similar jobs. Styles: static/src/css/llmd_jobs.css (scoped to .o_llmd_view). -->
     <template id="job_view" name="LLMD: job detail view (shared)">
         <div class="o_llmd_view">
+            <div class="o_llmd_jbar" aria-hidden="true">
+                <div class="container o_llmd_jbar_in">
+                    <span class="o_llmd_jbar_logo" t-out="((d.get('company') or d['title'] or '?').strip() or '?')[:1].upper()"/>
+                    <div class="o_llmd_jbar_txt"><b t-out="d['title']"/><small><a t-if="d.get('company_href')" t-att-href="d['company_href']" tabindex="-1" t-out="d.get('company')"/><t t-else="" t-out="d.get('company')"/><t t-if="d.get('posted')"> · <t t-out="d['posted']"/></t></small></div>
+                    <a t-if="d.get('apply_form_href')" class="btn o_llmd_jbar_apply" data-llmd-auth="1" tabindex="-1" t-att-href="d['apply_form_href']">Apply Now</a>
+                    <a t-elif="d.get('go_href')" class="btn o_llmd_jbar_apply" data-llmd-auth="1" tabindex="-1" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Apply Now <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                    <a t-elif="d.get('internal_href')" class="btn o_llmd_jbar_apply" tabindex="-1" t-att-href="d['internal_href']">Apply Now</a>
+                </div>
+            </div>
             <div t-attf-class="o_llmd_view_band o_llmd_tint_#{d.get('track') or 'none'}" aria-hidden="true"><span class="o_llmd_vblob o_llmd_vblob_1"/><span class="o_llmd_vblob o_llmd_vblob_2"/></div>
             <div class="container o_llmd_wrap">
                 <nav class="o_llmd_crumbs" aria-label="Breadcrumb">
@@ -28,6 +37,7 @@
                             <a t-if="d.get('work_mode') and lk.get('mode')" class="o_llmd_mode_pill o_llmd_tag_link" t-att-href="lk['mode']" t-att-title="'All %s jobs' % d['work_mode']"><i class="fa fa-laptop" aria-hidden="true"/> <t t-out="d['work_mode']"/></a>
                             <span t-elif="d.get('work_mode')" class="o_llmd_mode_pill"><i class="fa fa-laptop" aria-hidden="true"/> <t t-out="d['work_mode']"/></span>
                         </div>
+                        <span t-if="(d.get('post_badge') or ('', ''))[0]" t-attf-class="o_llmd_postbadge #{d['post_badge'][1]}" t-out="d['post_badge'][0]"/>
                         <h1 class="o_llmd_title" t-out="d['title']" t-att-lang="d.get('title_lang')"/>
                         <ul class="o_llmd_meta">
                             <li t-if="d.get('company')"><i class="fa fa-building-o"/><a t-if="d.get('company_href')" class="o_llmd_meta_strong o_llmd_meta_link" t-att-href="d['company_href']" t-out="d['company']"/><span t-else="" class="o_llmd_meta_strong" t-out="d['company']"/></li>
@@ -43,17 +53,52 @@
                             <li t-if="d.get('posted')" class="o_llmd_meta_soft"><i class="fa fa-clock-o"/><a t-if="lk.get('posted')" class="o_llmd_meta_link" t-att-href="lk['posted']" t-out="d['posted']"/><span t-else="" t-out="d['posted']"/></li>
                         </ul>
                     </div>
+                    <div class="o_llmd_head_apply">
+                        <a t-if="d.get('apply_form_href')" role="button" class="btn o_llmd_apply o_llmd_head_apply_btn" t-att-href="d['apply_form_href']">Apply Now <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                        <a t-elif="d.get('go_href')" role="button" class="btn o_llmd_apply o_llmd_head_apply_btn" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Apply Now <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                        <a t-elif="d.get('internal_href')" role="button" class="btn o_llmd_apply o_llmd_head_apply_btn" t-att-href="d['internal_href']">Apply Now <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                        <button t-else="" type="button" class="btn o_llmd_head_apply_btn disabled" disabled="disabled" title="A valid application link is not available for this job.">Apply Now</button>
+                        <a t-if="d.get('apply_form_href') and d.get('go_href')" class="o_llmd_head_apply_alt" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">or apply on the employer's website <i class="fa fa-external-link"/></a>
+                    </div>
                 </header>
 
                 <div class="row g-4">
-                    <div class="col-lg-8 order-2 order-lg-1">
+                    <div class="col-lg-8">
                         <div t-if="d.get('source_lang') == 'zh'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer published this job in Chinese and gives no English version. It is shown as written - no machine translation is added, so nothing is changed or made up.</span></div>
                         <div t-elif="d.get('source_lang') == 'zh-en'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer wrote this job in Chinese and English. It is shown as written - no machine translation is added.</span></div>
                         <div t-elif="d.get('source_lang') == 'zh-title'" class="o_llmd_note o_llmd_note_lang" lang="en"><i class="fa fa-language" aria-hidden="true"/><span>The employer gives this job's title in Chinese only; the description below is the employer's English text. The title is shown as written - no machine translation is added.</span></div>
                         <div t-if="d.get('notice')" class="o_llmd_note"><i class="fa fa-info-circle" aria-hidden="true"/><span t-out="d['notice']"/></div>
-                        <section class="o_llmd_card o_llmd_overview">
+                        <section t-if="d.get('quals') or d.get('duties') or d.get('skills') or d.get('company_card')" class="o_llmd_card o_llmd_roleov">
+                            <h2>Role overview</h2>
+                            <div t-if="d.get('quals') or d.get('duties')" class="o_llmd_roleov_two">
+                                <div t-if="d.get('quals')" class="o_llmd_roleov_box"><p class="o_llmd_roleov_lbl">Qualifications</p><ul><li t-foreach="d['quals']" t-as="q" t-out="q"/></ul></div>
+                                <div t-if="d.get('duties')" class="o_llmd_roleov_box"><p class="o_llmd_roleov_lbl">Responsibilities</p><ul><li t-foreach="d['duties']" t-as="du" t-out="du"/></ul></div>
+                            </div>
+                            <div class="o_llmd_roleov_three">
+                                <div class="o_llmd_roleov_box">
+                                    <p class="o_llmd_roleov_lbl">Key facts</p>
+                                    <ul class="o_llmd_roleov_facts">
+                                        <li t-if="d.get('location')"><i class="fa fa-map-marker" aria-hidden="true"/> <t t-out="d['location']"/></li>
+                                        <li t-if="d.get('type_label') or d.get('work_mode_label')"><i class="fa fa-briefcase" aria-hidden="true"/> <t t-out="' · '.join(x for x in (d.get('type_label'), d.get('work_mode_label')) if x)"/></li>
+                                        <li t-if="d.get('years')"><i class="fa fa-signal" aria-hidden="true"/> <t t-out="d['years']"/> experience</li>
+                                        <li t-foreach="d.get('role_list') or []" t-as="rl"><i class="fa fa-id-badge" aria-hidden="true"/> <t t-out="rl"/></li>
+                                        <li t-if="d.get('salary')"><i class="fa fa-money" aria-hidden="true"/> <t t-out="d['salary']"/></li>
+                                        <li t-foreach="(d.get('languages') or [])[:2]" t-as="lg"><i class="fa fa-language" aria-hidden="true"/> <t t-out="lg[0]"/></li>
+                                    </ul>
+                                </div>
+                                <div t-if="d.get('skills')" class="o_llmd_roleov_box"><p class="o_llmd_roleov_lbl"><i class="fa fa-wrench" aria-hidden="true"/> Hard skills</p>
+                                    <div class="o_llmd_roleov_chips"><span t-foreach="d['skills']" t-as="sk" t-attf-class="o_llmd_roleov_chip #{'o_llmd_roleov_chip_main' if sk_index &lt; 4 else ''}" t-out="sk"/></div></div>
+                                <div t-if="d.get('soft_skills')" class="o_llmd_roleov_box"><p class="o_llmd_roleov_lbl"><i class="fa fa-star-o" aria-hidden="true"/> Other skills</p>
+                                    <ul class="o_llmd_roleov_soft"><li t-foreach="d['soft_skills']" t-as="ss" t-out="ss"/></ul></div>
+                            </div>
+                        </section>
+                        <section class="o_llmd_card o_llmd_overview o_llmd_jdesc">
                             <span class="o_llmd_sec_icon" aria-hidden="true"><i class="fa fa-file-text-o"/></span>
-                            <h2>Job Overview</h2>
+                            <h2>Job description</h2>
+                            <p t-if="d.get('jd_pdf') or d.get('jd_url')" class="o_llmd_jd_links">
+                                <a t-if="d.get('jd_pdf')" t-att-href="d['jd_pdf']" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o" aria-hidden="true"/> Full job description (PDF)</a>
+                                <a t-if="d.get('jd_url')" t-att-href="d['jd_url']" target="_blank" rel="noopener noreferrer nofollow"><i class="fa fa-external-link" aria-hidden="true"/> Original job posting</a>
+                            </p>
                             <p t-if="d.get('overview')" t-out="d['overview']"/>
                             <h3 t-if="d.get('point_groups')" class="o_llmd_sub_h">Key points</h3>
                             <div t-if="d.get('point_groups')" class="o_llmd_timeline">
@@ -74,98 +119,153 @@
                             <h3 t-if="d.get('skills')" class="o_llmd_sub_h">Skills</h3>
                             <div t-if="d.get('skills')" class="o_llmd_skills"><span t-foreach="d['skills']" t-as="skill" class="o_llmd_skill" t-out="skill"/></div>
                             <p t-if="d.get('facts')" class="o_llmd_facts"><i class="fa fa-info-circle" aria-hidden="true"/><span t-out="d['facts']"/></p>
+                            <button type="button" class="o_llmd_jdesc_more" hidden="hidden" aria-expanded="false"><span class="o_llmd_more_t">More</span><span class="o_llmd_less_t">Less</span> <i class="fa fa-chevron-down" aria-hidden="true"/></button>
                         </section>
+                        <div t-if="d.get('share_url')" class="o_llmd_card o_llmd_jshare">
+                            <button type="button" class="o_llmd_share_btn" t-att-data-url="d['share_url']" t-att-data-title="d['title']"><i class="fa fa-share-alt" aria-hidden="true"/> Share this job</button>
+                            <span class="o_llmd_share_ok" role="status" hidden="hidden">Link copied</span>
+                        </div>
                         <p t-if="'from_text' in d and not d['from_text']" class="o_llmd_card o_llmd_nodesc">
                             <i class="fa fa-file-o" aria-hidden="true"/> No description is available for this job yet. The employer's application page has the details.
                         </p>
                     </div>
 
-                    <div class="col-lg-4 order-1 order-lg-2">
-                        <aside class="o_llmd_apply_card">
-                            <span class="o_llmd_apply_icon" aria-hidden="true"><i class="fa fa-paper-plane"/></span>
-                            <h2>Interested in this role?</h2>
-                            <a t-if="d.get('apply_form_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['apply_form_href']">Apply Now</a>
-                            <a t-elif="d.get('go_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">
-                                Apply Now <i class="fa fa-external-link ms-1"/>
+                    <div class="col-lg-4">
+                        <aside t-if="d.get('company_card')" class="o_llmd_card o_llmd_cocard_side" t-att-aria-label="'About %s' % d['company_card']['name']">
+                            <h2>About the company</h2>
+                            <div class="o_llmd_cos_head">
+                                <span class="o_llmd_cos_logo" aria-hidden="true" t-out="d['company_card']['initial']"/>
+                                <a t-att-href="d['company_card']['href']" class="o_llmd_cos_name" t-out="d['company_card']['name']"/>
+                            </div>
+                            <p class="o_llmd_cos_tags">
+                                <span t-if="d['company_card']['industry']" class="o_llmd_cos_tag"><i class="fa fa-tag" aria-hidden="true"/> <t t-out="d['company_card']['industry']"/></span>
+                                <span t-if="d['company_card']['size']" class="o_llmd_cos_tag"><i class="fa fa-users" aria-hidden="true"/> <t t-out="d['company_card']['size']"/></span>
+                                <span t-if="d['company_card']['hq']" class="o_llmd_cos_tag"><i class="fa fa-building-o" aria-hidden="true"/> <t t-out="d['company_card']['hq']"/></span>
+                            </p>
+                            <p t-if="d['company_card']['description']" class="o_llmd_cos_desc" t-out="d['company_card']['description']"/>
+                            <div class="o_llmd_cos_foot">
+                                <a t-if="d['company_card']['website']" class="o_llmd_cos_ic" t-att-href="d['company_card']['website']" target="_blank" rel="noopener noreferrer nofollow" title="Website" aria-label="Company website"><i class="fa fa-globe"/></a>
+                                <a class="o_llmd_cos_ic" t-att-href="d['company_card']['linkedin']" target="_blank" rel="noopener noreferrer nofollow" t-att-title="'LinkedIn' if d['company_card']['linkedin_direct'] else 'Find on LinkedIn'" aria-label="LinkedIn"><i class="fa fa-linkedin"/></a>
+                                <a class="o_llmd_cos_all" t-att-href="d['company_card']['href']">See all <t t-out="d['company_card']['jobs']"/> jobs <i class="fa fa-angle-right" aria-hidden="true"/></a>
+                            </div>
+                        </aside>
+                        <aside t-if="similar" class="o_llmd_card o_llmd_related" aria-label="Related jobs">
+                            <h2>Related jobs</h2>
+                            <a t-foreach="similar" t-as="rj" class="o_llmd_rel_item" t-att-href="rj.website_path()">
+                                <span class="o_llmd_rel_logo" aria-hidden="true" t-out="((rj.company or rj.title or '?').strip() or '?')[:1].upper()"/>
+                                <span class="o_llmd_rel_txt"><b t-out="rj.title"/><small><t t-out="rj.company"/><t t-if="rj.posted"> · <t t-out="rj.posted_text()"/></t></small><small><t t-out="', '.join(x for x in (rj.city, rj.country) if x) or rj.location"/></small></span>
                             </a>
-                            <a t-elif="d.get('internal_href')" role="button" class="btn btn-primary o_llmd_apply_btn o_llmd_apply" t-att-href="d['internal_href']">Apply Now</a>
-                            <t t-else="">
-                                <button type="button" class="btn btn-secondary o_llmd_apply_btn o_llmd_apply disabled" disabled="disabled">Apply Now</button>
-                                <p class="o_llmd_apply_help">A valid application link is not available for this job.</p>
-                            </t>
-                            <p t-if="d.get('sign_in')" class="o_llmd_apply_help">Sign in or create an account first; you then come straight back to this job.</p>
-                            <p t-if="d.get('apply_form_href')" class="o_llmd_apply_help">Add your details (a resume is optional). Your application is saved in our recruitment system.</p>
-                            <p t-if="d.get('apply_form_href') and d.get('go_href')" class="o_llmd_apply_help mt-2"><a class="o_llmd_employer" t-att-href="d['go_href']" target="_blank" rel="noopener noreferrer nofollow">Apply on the employer's website <i class="fa fa-external-link ms-1"/></a></p>
-                            <p t-elif="d.get('go_href')" class="o_llmd_apply_help">You will be taken to the employer's application page.</p>
-                            <ol t-if="d.get('go_href') and not d.get('apply_form_href')" class="o_llmd_steps">
-                                <li><span>1</span>Open the employer's page with the button above</li>
-                                <li><span>2</span>Send your application there</li>
-                                <li><span>3</span>The company gets back to you</li>
-                            </ol>
+                            <a t-if="d.get('category_href')" class="o_llmd_rel_all" t-att-href="d['category_href']">See all <t t-out="d['category_label']"/> jobs <i class="fa fa-angle-right" aria-hidden="true"/></a>
                         </aside>
                     </div>
                 </div>
 
-                <section t-if="similar" class="o_llmd_similar o_llmd_board">
-                    <div class="o_llmd_sec_head">
-                        <h2 class="o_llmd_h2">Similar jobs</h2>
-                        <p>More open roles like this one</p>
-                    </div>
-                    <div class="row g-4 o_llmd_grid">
-                        <t t-foreach="similar" t-as="job"><t t-call="llmd_job_aggregator.job_card"><t t-set="compact" t-value="True"/><t t-set="no_apply" t-value="True"/></t></t>
-                    </div>
+                <section t-if="company_jobs and company_jobs[0]" class="o_llmd_card o_llmd_cojobs" aria-labelledby="llmd_cojobs_h">
+                    <h2 id="llmd_cojobs_h">Other jobs at <t t-out="d.get('company')"/></h2>
+                    <a t-foreach="company_jobs[0]" t-as="oj" class="o_llmd_cojob" t-att-href="oj.website_path()">
+                        <span class="o_llmd_cojob_logo" aria-hidden="true" t-out="((oj.company or '?').strip() or '?')[:1].upper()"/>
+                        <span class="o_llmd_cojob_main">
+                            <b class="o_llmd_cojob_title" t-out="oj.title"/>
+                            <span class="o_llmd_cojob_co" t-out="oj.company"/>
+                            <span class="o_llmd_cojob_meta">
+                                <span t-if="oj.location"><i class="fa fa-map-marker" aria-hidden="true"/> <t t-out="oj.location"/></span>
+                                <span t-if="oj.job_type"><i class="fa fa-briefcase" aria-hidden="true"/> <t t-out="dict(oj.facet_tags()).get('type') or ''"/></span>
+                                <span t-if="oj.years_label()"><i class="fa fa-signal" aria-hidden="true"/> <t t-out="oj.years_label()"/></span>
+                            </span>
+                            <span t-if="oj.card_skills(5)[0]" class="o_llmd_cojob_sk" t-out="' · '.join(oj.card_skills(5)[0])"/>
+                        </span>
+                        <span class="o_llmd_cojob_when" t-out="oj.posted_text() if oj.posted else ''"/>
+                    </a>
+                    <a t-if="company_jobs[1] &gt; len(company_jobs[0]) and d.get('company_href')" class="o_llmd_cojobs_all" t-att-href="d['company_href']">See all <t t-out="company_jobs[1]"/> jobs at <t t-out="d.get('company')"/> <i class="fa fa-angle-right" aria-hidden="true"/></a>
                 </section>
             </div>
             <!-- Apply Now without leaving the page (static/src/js/llmd_jobs.js): a signed-out visitor signs in or signs up in this window - the forms post to Odoo's own
                  /web/login and /web/signup - and the same job's application opens right after (our form in this window, or the employer's page in a new tab).
                  Without the script the window stays hidden and Apply Now goes the usual way (login page, then back to this job). -->
-            <div t-if="d.get('apply_form_href') or d.get('go_href') or d.get('internal_href')" id="llmd_auth" class="o_llmd_auth" hidden="hidden"
-                 t-att-data-form="d.get('apply_form_href') or None" t-att-data-go="d.get('go_href') or None" t-att-data-internal="d.get('internal_href') or None"
-                 t-att-data-sign-in="'1' if d.get('sign_in') else None">
-                <div class="o_llmd_auth_backdrop" data-llmd-close="1"/>
-                <div class="o_llmd_auth_box" role="dialog" aria-modal="true" aria-labelledby="llmd_auth_title" tabindex="-1">
-                    <button type="button" class="o_llmd_auth_x" data-llmd-close="1" aria-label="Close"><i class="fa fa-times" aria-hidden="true"/></button>
-                    <div class="o_llmd_auth_step" data-step="auth">
-                        <span class="o_llmd_auth_icon" aria-hidden="true"><i class="fa fa-paper-plane"/></span>
-                        <h2 id="llmd_auth_title" class="o_llmd_auth_title"><span data-tab-show="login">Sign in to apply</span><span data-tab-show="signup" hidden="hidden">Create your account</span></h2>
-                        <p class="o_llmd_auth_job"><strong t-out="d.get('title')"/><t t-if="d.get('company')"> · <t t-out="d['company']"/></t></p>
-                        <div class="o_llmd_auth_tabs" role="tablist" aria-label="Sign in or sign up">
-                            <button type="button" role="tab" class="o_llmd_auth_tab active" data-tab="login" aria-selected="true">Login</button>
-                            <button type="button" role="tab" class="o_llmd_auth_tab" data-tab="signup" aria-selected="false">Sign Up</button>
-                        </div>
-                        <div class="alert alert-danger o_llmd_auth_err" role="alert" hidden="hidden"/>
-                        <form class="o_llmd_auth_form" data-tab="login" method="post" action="/web/login" novalidate="novalidate">
-                            <input type="hidden" name="csrf_token"/>
-                            <input type="hidden" name="type" value="password"/>
-                            <input type="hidden" name="redirect" value="/jobs/auth/state"/>
-                            <label class="form-label" for="llmd_auth_login">Email</label>
-                            <input type="email" id="llmd_auth_login" name="login" class="form-control" required="required" autocapitalize="off" autocomplete="username" placeholder="name@example.com"/>
-                            <label class="form-label" for="llmd_auth_password">Password</label>
-                            <input type="password" id="llmd_auth_password" name="password" class="form-control" required="required" autocomplete="current-password" maxlength="4096"/>
-                            <a class="o_llmd_auth_forgot" href="/web/reset_password" target="_blank" rel="noopener">Forgot password?</a>
-                            <button type="submit" class="o_llmd_auth_submit">Login and apply</button>
-                        </form>
-                        <form class="o_llmd_auth_form" data-tab="signup" method="post" action="/web/signup" novalidate="novalidate" hidden="hidden">
-                            <input type="hidden" name="csrf_token"/>
-                            <input type="hidden" name="token"/>
-                            <input type="hidden" name="redirect" value="/jobs/auth/state"/>
-                            <input type="hidden" name="confirm_password"/><!-- Odoo's sign-up wants it: the script copies the one password into it -->
-                            <label class="form-label" for="llmd_auth_name">Full Name</label>
-                            <input type="text" id="llmd_auth_name" name="name" class="form-control" required="required" autocomplete="name" maxlength="120"/>
-                            <label class="form-label" for="llmd_auth_email">Email Address</label>
-                            <input type="email" id="llmd_auth_email" name="login" class="form-control" required="required" autocapitalize="off" autocomplete="email" maxlength="254" placeholder="name@example.com"/>
-                            <label class="form-label" for="llmd_auth_new">Password</label>
-                            <input type="password" id="llmd_auth_new" name="password" class="form-control" required="required" autocomplete="new-password" maxlength="4096"/>
-                            <button type="submit" class="o_llmd_auth_submit">Sign up and apply</button>
-                        </form>
-                        <p class="o_llmd_auth_switch">
-                            <span data-tab-show="login">Don't have an account? <button type="button" class="o_llmd_auth_link" data-tab="signup">Sign Up</button></span>
-                            <span data-tab-show="signup" hidden="hidden">Already have an account? <button type="button" class="o_llmd_auth_link" data-tab="login">Login</button></span>
-                        </p>
+            <t t-if="d.get('apply_form_href') or d.get('go_href') or d.get('internal_href')" t-call="llmd_job_aggregator.auth_modal">
+                <t t-set="auth_form" t-value="d.get('apply_form_href')"/>
+                <t t-set="auth_go" t-value="d.get('go_href')"/>
+                <t t-set="auth_internal" t-value="d.get('internal_href')"/>
+                <t t-set="auth_sign_in" t-value="d.get('sign_in')"/>
+                <t t-set="auth_line" t-value="d.get('title')"/>
+                <t t-set="auth_company" t-value="d.get('company')"/>
+            </t>
+        </div>
+    </template>
+
+    <!-- The sign-in / sign-up window (Odoo's own /web/login and /web/signup, static/src/js/llmd_jobs.js) - Apply Now on a job page and "Post a job" (post_intro).
+         Expects: auth_form / auth_go / auth_internal (what opens after the sign-in), auth_sign_in, auth_line + auth_company (the line under the title);
+         optional: auth_auto (opens by itself), auth_login_title, auth_login_btn, auth_signup_btn. -->
+    <template id="auth_modal" name="LLMD: sign-in window">
+        <div id="llmd_auth" class="o_llmd_auth" hidden="hidden"
+             t-att-data-form="auth_form or None" t-att-data-go="auth_go or None" t-att-data-internal="auth_internal or None"
+             t-att-data-sign-in="'1' if auth_sign_in else None" t-att-data-auto="'1' if auth_auto else None">
+            <div class="o_llmd_auth_backdrop" data-llmd-close="1"/>
+            <div class="o_llmd_auth_box" role="dialog" aria-modal="true" aria-labelledby="llmd_auth_title" tabindex="-1">
+                <button type="button" class="o_llmd_auth_x" data-llmd-close="1" aria-label="Close"><i class="fa fa-times" aria-hidden="true"/></button>
+                <div class="o_llmd_auth_step" data-step="auth">
+                    <span class="o_llmd_auth_icon" aria-hidden="true"><i class="fa fa-paper-plane"/></span>
+                    <h2 id="llmd_auth_title" class="o_llmd_auth_title"><span data-tab-show="login" t-out="auth_login_title or 'Sign in to apply'"/><span data-tab-show="signup" hidden="hidden">Create your account</span></h2>
+                    <p class="o_llmd_auth_job"><strong t-out="auth_line"/><t t-if="auth_company"> · <t t-out="auth_company"/></t></p>
+                    <div class="o_llmd_auth_tabs" role="tablist" aria-label="Sign in or sign up">
+                        <button type="button" role="tab" class="o_llmd_auth_tab active" data-tab="login" aria-selected="true">Login</button>
+                        <button type="button" role="tab" class="o_llmd_auth_tab" data-tab="signup" aria-selected="false">Sign Up</button>
                     </div>
-                    <div class="o_llmd_auth_step" data-step="apply" hidden="hidden" aria-live="polite"/>
+                    <div class="alert alert-danger o_llmd_auth_err" role="alert" hidden="hidden"/>
+                    <form class="o_llmd_auth_form" data-tab="login" method="post" action="/web/login" novalidate="novalidate">
+                        <input type="hidden" name="csrf_token"/>
+                        <input type="hidden" name="type" value="password"/>
+                        <input type="hidden" name="redirect" value="/jobs/auth/state"/>
+                        <label class="form-label" for="llmd_auth_login">Email</label>
+                        <input type="email" id="llmd_auth_login" name="login" class="form-control" required="required" autocapitalize="off" autocomplete="username" placeholder="name@example.com"/>
+                        <label class="form-label" for="llmd_auth_password">Password</label>
+                        <input type="password" id="llmd_auth_password" name="password" class="form-control" required="required" autocomplete="current-password" maxlength="4096"/>
+                        <a class="o_llmd_auth_forgot" href="/web/reset_password" target="_blank" rel="noopener">Forgot password?</a>
+                        <button type="submit" class="o_llmd_auth_submit" t-out="auth_login_btn or 'Login and apply'"/>
+                    </form>
+                    <form class="o_llmd_auth_form" data-tab="signup" method="post" action="/web/signup" novalidate="novalidate" hidden="hidden">
+                        <input type="hidden" name="csrf_token"/>
+                        <input type="hidden" name="token"/>
+                        <input type="hidden" name="redirect" value="/jobs/auth/state"/>
+                        <input type="hidden" name="confirm_password"/><!-- Odoo's sign-up wants it: the script copies the one password into it -->
+                        <t t-call="llmd_job_aggregator.role_fields"><t t-set="rid" t-value="'su'"/></t>
+                        <label class="form-label" for="llmd_auth_name">Full Name</label>
+                        <input type="text" id="llmd_auth_name" name="name" class="form-control" required="required" autocomplete="name" maxlength="120"/>
+                        <label class="form-label" for="llmd_auth_email">Email Address</label>
+                        <input type="email" id="llmd_auth_email" name="login" class="form-control" required="required" autocapitalize="off" autocomplete="email" maxlength="254" placeholder="name@example.com"/>
+                        <label class="form-label" for="llmd_auth_phone">Phone Number</label>
+                        <input type="tel" id="llmd_auth_phone" name="llmd_signup_phone" class="form-control" required="required" autocomplete="tel" maxlength="20" inputmode="tel" placeholder="+91 98xxxxxxxx"/>
+                        <label class="form-label" for="llmd_auth_new">Password</label>
+                        <input type="password" id="llmd_auth_new" name="password" class="form-control" required="required" autocomplete="new-password" maxlength="4096"/>
+                        <button type="submit" class="o_llmd_auth_submit" t-out="auth_signup_btn or 'Sign up and apply'"/>
+                    </form>
+                    <p class="o_llmd_auth_switch">
+                        <span data-tab-show="login">Don't have an account? <button type="button" class="o_llmd_auth_link" data-tab="signup">Sign Up</button></span>
+                        <span data-tab-show="signup" hidden="hidden">Already have an account? <button type="button" class="o_llmd_auth_link" data-tab="login">Login</button></span>
+                    </p>
                 </div>
+                <!-- an account that signed in without a role yet: asked once (POST /jobs/auth/role) -->
+                <form class="o_llmd_auth_step o_llmd_role_form" data-step="role" hidden="hidden" novalidate="novalidate">
+                    <h2 class="o_llmd_auth_title">One quick question</h2>
+                    <p class="o_llmd_auth_job">How do you use LLM Decode Jobs? Choose one.</p>
+                    <div class="alert alert-danger o_llmd_role_err" role="alert" hidden="hidden"/>
+                    <t t-call="llmd_job_aggregator.role_fields"><t t-set="rid" t-value="'ro'"/><t t-set="role_default" t-value="'none'"/></t>
+                    <button type="submit" class="o_llmd_auth_submit o_llmd_role_go" hidden="hidden">Continue</button>
+                </form>
+                <div class="o_llmd_auth_step" data-step="apply" hidden="hidden" aria-live="polite"/>
             </div>
         </div>
+    </template>
+
+    <!-- Job seeker or hiring (models/partner.py), in the sign-up form and in the "one quick question" step - only the choice: a hirer gives the company
+         details in Section 1 of the Post a job form. Expects: rid (unique id part); optional role_default ('hirer' on Post a job). -->
+    <template id="role_fields" name="LLMD: job seeker or hiring">
+        <fieldset class="o_llmd_role_box">
+            <legend class="form-label">I am</legend>
+            <div class="o_llmd_role_opts">
+                <label class="o_llmd_role_opt"><input type="radio" name="llmd_role" value="applicant" t-att-checked="None if role_default in ('hirer', 'none') else 'checked'"/><span><i class="fa fa-search" aria-hidden="true"/><b>Job seeker</b><small>Find and apply for jobs</small></span></label>
+                <label class="o_llmd_role_opt"><input type="radio" name="llmd_role" value="hirer" t-att-checked="'checked' if role_default == 'hirer' else None"/><span><i class="fa fa-briefcase" aria-hidden="true"/><b>Employer / HR</b><small>Post jobs and hire</small></span></label>
+            </div>
+        </fieldset>
     </template>
 </odoo>

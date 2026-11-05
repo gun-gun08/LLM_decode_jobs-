@@ -1,6 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_llmd_job_listing_recruiter,llmd.job.listing recruiter,model_llmd_job_listing,hr_recruitment.group_hr_recruitment_user,1,0,0,0
-access_llmd_job_listing_manager,llmd.job.listing manager,model_llmd_job_listing,hr_recruitment.group_hr_recruitment_manager,1,1,0,0
+access_llmd_job_listing_manager,llmd.job.listing manager,model_llmd_job_listing,hr_recruitment.group_hr_recruitment_manager,1,1,1,0
 access_llmd_job_listing_admin,llmd.job.listing admin,model_llmd_job_listing,base.group_system,1,1,1,1
 access_llmd_job_source_recruiter,llmd.job.source recruiter,model_llmd_job_source,hr_recruitment.group_hr_recruitment_user,1,0,0,0
 access_llmd_job_source_admin,llmd.job.source admin,model_llmd_job_source,base.group_system,1,1,1,1
@@ -14,3 +14,6 @@ access_llmd_job_click_manager,llmd.job.click manager,model_llmd_job_click,hr_rec
 access_llmd_job_click_admin,llmd.job.click admin,model_llmd_job_click,base.group_system,1,1,1,1
 access_llmd_company_recruiter,llmd.company recruiter,model_llmd_company,hr_recruitment.group_hr_recruitment_user,1,0,0,0
 access_llmd_company_admin,llmd.company admin,model_llmd_company,base.group_system,1,1,1,1
+access_llmd_company_manager,llmd.company manager,model_llmd_company,hr_recruitment.group_hr_recruitment_manager,1,1,0,0
+access_llmd_plan_request_manager,llmd.plan.request manager,model_llmd_plan_request,hr_recruitment.group_hr_recruitment_manager,1,1,0,0
+access_llmd_plan_request_admin,llmd.plan.request admin,model_llmd_plan_request,base.group_system,1,1,1,1

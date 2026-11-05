@@ -55,7 +55,7 @@ FOOTER = """<data inherit_id="website.layout" name="Default" active="True">
                                 <li><a href="/jobs">Jobs Explorer</a></li>
                                 <li><a href="/jobs/all">All jobs</a></li>
                                 <li><a href="/companies">Companies</a></li>
-                                <li><a href="/categories">Categories</a></li>
+                                <li><a href="/categories">Industries</a></li>
                                 <li><a href="/locations">Locations</a></li>
                                 <li><a href="/regions">Regions</a></li>
                             </ul>

@@ -114,7 +114,7 @@ COMPANY_HQ = {
 _HQ_OF = {name.lower(): country for country, names in COMPANY_HQ.items() for name in names}
 
 # Who put a job on the board, and how a person applied (Job Applications, Apply Clicks, Job board listings)
-POSTED_TYPES = [('fetched', 'Fetched'), ('public_user', 'Public User')]
+POSTED_TYPES = [('fetched', 'Fetched'), ('public_user', 'Public User'), ('llmdecode', 'LLM Decode')]        # public_user: an employer posted it on the website, llmdecode: our team did
 APPLICATION_TYPES = [('website_form', 'Website Form'), ('external_apply_click', 'External Apply Click')]
 
 
@@ -312,7 +312,8 @@ def slugify(text):
 
 # /jobs/<word> addresses that are pages of the board, never a job (a job whose address would be one of them gets its ID added)
 RESERVED_JOB_SLUGS = ('all', 'page', 'latest', 'regions', 'countries', 'categories', 'results-count', 'course-matches', 'auth', 'ext', 'position', 'apply', 'add',
-                      'detail', 'company', 'category', 'location', 'region', 'role', 'course', 'remote', 'delhi-ncr', 'job', 'latest-jobs', 'course-match', 'faq', 'companies-by-region')
+                      'detail', 'company', 'category', 'location', 'region', 'role', 'course', 'remote', 'delhi-ncr', 'job', 'latest-jobs', 'course-match', 'faq', 'companies-by-region',
+                      'post', 'my', 'llmdecode', 'roles', 'departments')                     # /jobs/post, /jobs/my, /jobs/llmdecode (controllers/posts.py)
 
 
 def norm_key(title, company, location):
