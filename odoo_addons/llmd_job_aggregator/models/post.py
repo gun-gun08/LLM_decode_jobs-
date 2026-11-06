@@ -49,6 +49,10 @@ class LlmdJobPost(models.Model):
     _inherit = 'llmd.job.listing'
 
     post_paid = fields.Boolean(string='Paid with a job credit', copy=False, readonly=True)
+    # what the employer typed in the form (to fill the form again when the job is edited)
+    post_description = fields.Text(string='Description as typed', copy=False)
+    post_experience = fields.Char(string='Experience as typed', copy=False)
+    post_skills = fields.Char(string='Skills as typed', copy=False)
     post_kind = fields.Selection(POST_KINDS, string='Posted by', index=True, readonly=True, copy=False,
                                  help='Empty for a job of the sync. LLM Decode: our team posted it. Employer: an employer posted it on the website (/jobs/post).')
     post_state = fields.Selection(POST_STATES, string='Post status', index=True, copy=False, readonly=True)
@@ -230,6 +234,36 @@ class LlmdJobPost(models.Model):
         partner = user.partner_id.sudo()
         if not free and (partner.llmd_job_credits or 0) < 1:
             raise UserError('Your free job is used. Buy a plan on the For companies page to post more jobs.')
+        vals = dict(self._post_form_vals(form), post_kind='employer', poster_id=user.id, contact_email=user.email or user.login)
+        if not free:
+            vals['post_paid'] = True
+            partner.llmd_job_credits -= 1
+        return self.sudo().create(vals)
+
+    @api.model
+    def employer_update(self, user, post, form):
+        """The employer's edit of their own job (form already checked by validate_post). A pending or live job goes back to Pending review (hidden until
+        our team approves it again - so nothing unchecked is shown); a rejected job is sent again, which counts like a new job (free job or a credit)."""
+        post = post.sudo()
+        if post.post_kind != 'employer' or post.poster_id != user or post.post_state not in ('pending', 'live', 'rejected'):
+            raise UserError('This job cannot be edited. A closed job can be reopened from My jobs.')
+        vals = self._post_form_vals(form, update=True)
+        if post.post_state == 'rejected':
+            if self.open_posts_of(user) >= MAX_OPEN_POSTS:
+                raise UserError('You already have %d open jobs. Close one under My jobs before you send this one again.' % MAX_OPEN_POSTS)
+            partner = user.partner_id.sudo()
+            if not self.free_post_left(user):
+                if (partner.llmd_job_credits or 0) < 1:
+                    raise UserError('Sending this job again uses a job credit. Buy a plan on the For companies page.')
+                partner.llmd_job_credits -= 1
+                vals['post_paid'] = True
+        vals.update(post_state='pending', active=False, reject_reason=False)
+        post.write(vals)
+        return post
+
+    @api.model
+    def _post_form_vals(self, form, update=False):
+        """The listing values of a checked Post a job form (a new job, or an edit when `update`)."""
         html = text_to_html(form['description']) or str(Markup('<p>%s</p>') % (
             'The full description of this job is in the attached PDF.' if form.get('has_pdf') else 'The full description of this job is on the original job posting.'))
         if form.get('experience'):
@@ -239,19 +273,20 @@ class LlmdJobPost(models.Model):
             html += str(Markup('<p>Experience: %s.</p>') % exp)
         if form.get('skills'):
             html += str(Markup('<h3>Skills</h3><ul>%s</ul>') % Markup('').join(Markup('<li>%s</li>') % s for s in form['skills']))
-        vals = {'post_kind': 'employer', 'poster_id': user.id, 'contact_email': user.email or user.login, 'title': form['title'], 'company': form['company'],
+        vals = {'title': form['title'], 'company': form['company'],
                 'location': form['location'], 'salary': form.get('salary') or '', 'description_html': html, 'apply_how': form['apply_how'],
                 'apply_url': form.get('apply_url') or False, 'employment_type': F.TYPE_LABELS.get(form.get('job_type'), ''),
-                'jd_url': form.get('jd_url') or False, 'source_url': form.get('jd_url') or False}
+                'jd_url': form.get('jd_url') or False, 'source_url': form.get('jd_url') or False,
+                'post_description': form.get('description') or False, 'post_experience': (form.get('experience') or '').strip() or False,
+                'post_skills': ', '.join(form.get('skills') or []) or False}
         if form.get('department') in dict(POST_DEPARTMENTS):
             vals['post_department'] = form['department']
         for name in ('work_mode', 'job_type', 'exp_level'):
             if form.get(name):
                 vals[name] = form[name]
-        if not free:
-            vals['post_paid'] = True
-            partner.llmd_job_credits -= 1
-        return self.sudo().create(vals)
+            elif update:
+                vals[name] = False
+        return vals
 
     def employer_applications(self):
         """The applications people SENT for this post (our form), newest first - what the employer sees under My jobs."""

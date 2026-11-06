@@ -9,12 +9,12 @@
          open_n, max_open, modes, types, levels, post_days, max_mb -->
     <template id="post_form" name="LLMD: post a job (form)">
         <t t-call="website.layout">
-            <t t-set="additional_title">Post a job</t>
+            <t t-set="additional_title" t-value="'Edit job' if edit_post else 'Post a job'"/>
             <div id="wrap" class="o_llmd_board o_llmd_post_page">
                 <div class="container o_llmd_post_wrap">
                     <p class="o_llmd_post_nav"><a href="/jobs/employers"><i class="fa fa-arrow-left" aria-hidden="true"/> For companies</a> · <a href="/jobs/my">My jobs</a></p>
                     <div class="o_llmd_post_intro">
-                        <h1 class="o_llmd_h2">Post a job</h1>
+                        <h1 class="o_llmd_h2" t-out="'Edit your job' if edit_post else 'Post a job'"/>
                         <p class="o_llmd_post_sub">Get your job in front of LLM Decode learners.</p>
                         <p class="o_llmd_post_lead mb-2">Once your job is approved it is:</p>
                         <ul class="o_llmd_post_gets">
@@ -24,12 +24,15 @@
                             <li><i class="fa fa-check-square" aria-hidden="true"/> Applicants and resumes under My jobs</li>
                         </ul>
                     </div>
-                    <div t-if="open_n &gt;= max_open" class="alert alert-warning" role="status">You already have <t t-out="open_n"/> open jobs (the limit is <t t-out="max_open"/>). Close one under <a href="/jobs/my">My jobs</a> to post another.</div>
-                    <div t-if="free_post" class="alert alert-success o_llmd_credit_note" role="status"><i class="fa fa-gift" aria-hidden="true"/> Your first job is <b>free</b>.</div>
+                    <div t-if="edit_post" class="alert alert-info o_llmd_credit_note" role="status"><i class="fa fa-pencil" aria-hidden="true"/>
+                        <span>You are editing <b t-out="edit_post.title"/>. When you save, our team checks it again - <t t-if="edit_post.post_state == 'live'">it is hidden from the board until then (usually quick).</t><t t-elif="edit_post.post_state == 'rejected'">sending a rejected job again uses your free job or one job credit.</t><t t-else="">it stays in Pending review.</t></span></div>
+                    <div t-if="not edit_post and open_n &gt;= max_open" class="alert alert-warning" role="status">You already have <t t-out="open_n"/> open jobs (the limit is <t t-out="max_open"/>). Close one under <a href="/jobs/my">My jobs</a> to post another.</div>
+                    <div t-if="edit_post"/>
+                    <div t-elif="free_post" class="alert alert-success o_llmd_credit_note" role="status"><i class="fa fa-gift" aria-hidden="true"/> Your first job is <b>free</b>.</div>
                     <div t-elif="credits" class="alert alert-info o_llmd_credit_note" role="status"><i class="fa fa-ticket" aria-hidden="true"/> This job uses 1 of your <b t-out="credits"/> job credit<t t-if="credits != 1">s</t>.</div>
                     <div t-else="" class="alert alert-warning o_llmd_credit_note" role="status"><i class="fa fa-info-circle" aria-hidden="true"/> Your free job is used. <a href="/jobs/employers#plans">Buy a plan</a> to post more jobs - from ₹1,000 for 3 jobs.</div>
                     <div t-if="errors.get('form')" class="alert alert-danger" role="alert" t-out="errors['form']"/>
-                    <form method="post" action="/jobs/post" enctype="multipart/form-data" class="o_llmd_post_form" novalidate="novalidate">
+                    <form method="post" t-att-action="form_action" enctype="multipart/form-data" class="o_llmd_post_form" novalidate="novalidate">
                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                         <div style="position: absolute; left: -9999px;" aria-hidden="true"><input type="text" name="company_website" tabindex="-1" autocomplete="off"/></div>
 
@@ -133,6 +136,7 @@
                             <label class="form-label" for="p_pdf">Attach a PDF of your job posting <span class="text-muted">(up to <t t-out="max_mb"/> MB)</span></label>
                             <input id="p_pdf" name="jd_pdf" type="file" accept=".pdf" t-attf-class="form-control #{'is-invalid' if errors.get('jd_pdf') else ''}"/>
                             <div t-if="errors.get('jd_pdf')" class="invalid-feedback d-block" t-out="errors['jd_pdf']"/>
+                            <small t-if="edit_post and edit_post.jd_attachment_id" class="text-muted d-block mt-1"><i class="fa fa-file-pdf-o" aria-hidden="true"/> Current PDF: <t t-out="edit_post.jd_attachment_id.name"/> - choose a new file only to replace it.</small>
                             <label class="form-label mt-3" for="p_jdurl">Provide the URL of your job posting</label>
                             <input id="p_jdurl" name="jd_url" t-attf-class="form-control #{'is-invalid' if errors.get('jd_url') else ''}" maxlength="2000" t-att-value="vals.get('jd_url', '')" placeholder="https://careers.yourcompany.com/job/123"/>
                             <div t-if="errors.get('jd_url')" class="invalid-feedback d-block" t-out="errors['jd_url']"/>
@@ -154,7 +158,8 @@
                             <div t-if="errors.get('apply_url')" class="invalid-feedback d-block" t-out="errors['apply_url']"/>
                         </div>
                         <div class="o_llmd_post_actions">
-                            <button type="submit" class="btn o_llmd_btn_primary">Publish your job</button>
+                            <a t-if="edit_post" href="/jobs/my" class="btn btn-link">Cancel</a>
+                            <button type="submit" class="btn o_llmd_btn_primary" t-out="'Save and send for review' if edit_post else 'Publish your job'"/>
                         </div>
                         <p class="o_llmd_post_small text-end">Our team checks it first - you get an e-mail when it is live.</p>
                     </form>
@@ -163,7 +168,7 @@
         </t>
     </template>
 
-    <!-- /jobs/my. Expects: posts, counts, just_posted, max_open, states -->
+    <!-- /jobs/my. Expects: posts, counts, just_posted, just_edited, max_open, states -->
     <template id="my_jobs" name="LLMD: my posted jobs">
         <t t-call="website.layout">
             <t t-set="additional_title">My jobs</t>
@@ -173,6 +178,7 @@
                         <h1 class="o_llmd_h2">My jobs</h1>
                         <a href="/jobs/post" class="btn o_llmd_btn_primary"><i class="fa fa-plus" aria-hidden="true"/> Post a job</a>
                     </div>
+                    <div t-if="just_edited" class="alert alert-success" role="status">Saved - <b t-out="just_edited.title"/> is sent to our team again. We publish it after a quick check and send you an e-mail.</div>
                     <div t-if="just_posted" class="alert alert-success" role="status">Thank you - <b t-out="just_posted.title"/> is sent for review. We publish it after a quick check and send you an e-mail.</div>
                     <div t-if="not posts" class="o_llmd_empty"><p class="o_llmd_empty_title">No jobs posted yet.</p><p class="mb-0">Post your first job - it's free.</p></div>
                     <div t-else="" class="o_llmd_my_table">
@@ -186,6 +192,7 @@
                             <span><span t-attf-class="o_llmd_state o_llmd_state_#{p.post_state}" t-out="states.get(p.post_state)"/></span>
                             <span><a t-if="counts.get(p.id)" t-attf-href="/jobs/my/#{p.id}/applicants"><t t-out="counts[p.id]"/> - view</a><t t-else="">0</t></span>
                             <span class="o_llmd_my_act">
+                                <a t-if="p.post_state in ('pending', 'live', 'rejected')" t-attf-href="/jobs/my/#{p.id}/edit" class="btn btn-link btn-sm"><i class="fa fa-pencil" aria-hidden="true"/> <t t-out="'Edit and send again' if p.post_state == 'rejected' else 'Edit'"/></a>
                                 <form t-if="p.post_state == 'live'" method="post" t-attf-action="/jobs/my/#{p.id}/close"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Close job</button></form>
                                 <form t-if="p.post_state == 'closed'" method="post" t-attf-action="/jobs/my/#{p.id}/reopen"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Reopen</button></form>
                             </span>
@@ -251,4 +258,31 @@
         </xpath>
     </template>
 
+
+    <!-- An employer finds their jobs everywhere: in the account menu of the header ("My jobs", "Post a job") and on the My Account page (a card).
+         Shown to a hirer, or to anybody who already posted a job. -->
+    <template id="hirer_user_menu" name="LLMD: My jobs in the account menu" inherit_id="portal.user_dropdown">
+        <xpath expr="//*[@id='o_logout_divider']" position="before">
+            <t t-set="llmd_hirer" t-value="user_id.partner_id.llmd_role == 'hirer' or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', user_id.id), ('post_kind', '=', 'employer')], limit=1)"/>
+            <a t-if="llmd_hirer" href="/jobs/my" role="menuitem" class="dropdown-item ps-3">
+                <i class="fa fa-fw fa-briefcase me-1 small text-primary-emphasis"/> My jobs
+            </a>
+            <a t-if="llmd_hirer" href="/jobs/post" role="menuitem" class="dropdown-item ps-3">
+                <i class="fa fa-fw fa-plus me-1 small text-primary-emphasis"/> Post a job
+            </a>
+        </xpath>
+    </template>
+
+    <template id="hirer_portal_card" name="LLMD: My jobs on My Account" inherit_id="portal.portal_my_home">
+        <xpath expr="//div[@id='portal_common_category']" position="inside">
+            <t t-set="llmd_hirer" t-value="request.env.user.partner_id.llmd_role == 'hirer' or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', request.env.user.id), ('post_kind', '=', 'employer')], limit=1)"/>
+            <t t-if="llmd_hirer" t-call="portal.portal_docs_entry">
+                <t t-set="icon" t-value="'/llmd_job_aggregator/static/src/img/portal-my-jobs.svg'"/>
+                <t t-set="title">My jobs</t>
+                <t t-set="text">Your posted jobs, their status, applicants and resumes</t>
+                <t t-set="url" t-value="'/jobs/my'"/>
+                <t t-set="config_card" t-value="True"/>
+            </t>
+        </xpath>
+    </template>
 </odoo>

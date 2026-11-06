@@ -44,14 +44,26 @@ class LlmdJobPosts(http.Controller):
             raise NotFound()
         return post
 
-    def _llmd_form_values(self, user, vals=None, errors=None):
+    def _llmd_form_values(self, user, vals=None, errors=None, edit_post=None):
         partner = user.partner_id
         if vals is None:                                                # what the account already knows is filled in
             vals = {'company': partner.company_name or '', 'designation': partner.function or '', 'company_site': partner.website or '', 'phone': partner.phone or '',
                     'linkedin': partner.llmd_linkedin or ''}
         return {'vals': vals, 'errors': errors or {}, 'user_name': user.name, 'user_email': user.email or user.login, 'max_mb': A.MAX_RESUME // (1024 * 1024), 'open_n': request.env['llmd.job.listing'].sudo().open_posts_of(user), 'max_open': PO.MAX_OPEN_POSTS,
                 'modes': F.WORK_MODES, 'types': list(PO.POST_JOB_TYPES.items()), 'levels': list(PO.POST_LEVELS.items()), 'departments': PO.POST_DEPARTMENTS, 'post_days': PO.POST_DAYS,
-                'free_post': request.env['llmd.job.listing'].sudo().free_post_left(user), 'credits': partner.llmd_job_credits}
+                'free_post': request.env['llmd.job.listing'].sudo().free_post_left(user), 'credits': partner.llmd_job_credits,
+                'edit_post': edit_post, 'form_action': '/jobs/my/%d/edit' % edit_post.id if edit_post else '/jobs/post'}
+
+    @staticmethod
+    def _llmd_post_vals_of(post, partner):
+        """The form values of an existing job (Edit): what the employer typed, else what the job shows."""
+        from ..models import parsers as P
+        text = post.post_description or P.plain_text(post.description_html or '')
+        return {'company': post.company or '', 'designation': partner.function or '', 'company_site': partner.website or '', 'phone': partner.phone or '',
+                'linkedin': partner.llmd_linkedin or '', 'title': post.title or '', 'location': post.location or '', 'work_mode': post.work_mode or '',
+                'job_type': post.job_type or '', 'department': post.post_department or '', 'exp_level': post.exp_level or '', 'experience': post.post_experience or '',
+                'salary': post.salary or '', 'skills': post.post_skills or '', 'description': text, 'jd_url': post.jd_url or '', 'apply_how': post.apply_how or 'form',
+                'apply_url': post.apply_url or ''}
 
     @http.route('/jobs/post', type='http', auth='public', website=True, methods=['GET', 'POST'], sitemap=False)
     def llmd_post(self, **post):
@@ -65,9 +77,26 @@ class LlmdJobPosts(http.Controller):
             return request.render('llmd_job_aggregator.post_form', self._llmd_form_values(user))
         if post.get('company_website'):                                 # hidden field that only bots fill in
             return request.redirect('/jobs')
+        return self._llmd_save_post(user, post)
+
+    @http.route('/jobs/my/<int:post_id>/edit', type='http', auth='user', website=True, methods=['GET', 'POST'], sitemap=False)
+    def llmd_edit_post(self, post_id, **post):
+        """The employer edits their own job (pending, live or rejected); saving sends it to our team again."""
+        user = self._llmd_employer()
+        job = self._llmd_own_post(post_id, user)
+        if job.post_state not in ('pending', 'live', 'rejected'):
+            return request.redirect('/jobs/my')
+        if request.httprequest.method != 'POST':
+            return request.render('llmd_job_aggregator.post_form', self._llmd_form_values(user, self._llmd_post_vals_of(job, user.partner_id), None, job))
+        if post.get('company_website'):
+            return request.redirect('/jobs/my')
+        return self._llmd_save_post(user, post, job)
+
+    def _llmd_save_post(self, user, post, job=None):
+        """Check the Post a job form and save it: a new job, or the edit of `job`. On an error the form comes back with the messages."""
         upload = request.httprequest.files.get('jd_pdf')
         pdf = upload.read(A.MAX_RESUME + 1) if upload else b''
-        vals, errors = PO.validate_post(post, has_pdf=bool(pdf))
+        vals, errors = PO.validate_post(post, has_pdf=bool(pdf) or bool(job and job.jd_attachment_id))
         pdf_name = ''
         if pdf:
             pdf_error, ext, _mime, pdf_name = A.check_resume(upload.filename, pdf)
@@ -88,7 +117,8 @@ class LlmdJobPosts(http.Controller):
         if not errors:
             try:
                 with request.env.cr.savepoint():
-                    rec = request.env['llmd.job.listing'].sudo().employer_post(user, vals)
+                    Listing = request.env['llmd.job.listing'].sudo()
+                    rec = Listing.employer_update(user, job, vals) if job else Listing.employer_post(user, vals)
                     partner = user.partner_id.sudo()
                     if partner.llmd_role != 'hirer':                    # posting a job makes the account a hirer (its company kept on the contact)
                         request.env['res.partner'].llmd_set_role(partner, 'hirer', {} if partner.company_name else {'company_name': vals['company']})
@@ -102,8 +132,11 @@ class LlmdJobPosts(http.Controller):
                     if pdf:
                         att = request.env['ir.attachment'].sudo().create({'name': pdf_name, 'datas': base64.b64encode(pdf), 'mimetype': 'application/pdf',
                                                                           'res_model': 'llmd.job.listing', 'res_id': rec.id, 'type': 'binary'})
+                        old = rec.jd_attachment_id
                         rec.jd_attachment_id = att
-                return request.redirect('/jobs/my?posted=%d' % rec.id)
+                        if old:
+                            old.unlink()
+                return request.redirect('/jobs/my?%s=%d' % ('edited' if job else 'posted', rec.id))
             except UserError as exc:
                 errors['form'] = exc.args[0]
             except Exception:
@@ -111,7 +144,7 @@ class LlmdJobPosts(http.Controller):
                 errors['form'] = 'Sorry, your job could not be saved right now. Please try again in a few minutes.'
         shown = dict(vals, company_site=post.get('company_site') or '', designation=post.get('designation') or '', phone=post.get('phone') or '', linkedin=post.get('linkedin') or '',
                      jd_url=post.get('jd_url') or '', skills=post.get('skills') or '', description=post.get('description') or '', apply_url=post.get('apply_url') or '')
-        response = request.render('llmd_job_aggregator.post_form', self._llmd_form_values(user, shown, errors))
+        response = request.render('llmd_job_aggregator.post_form', self._llmd_form_values(user, shown, errors, job))
         response.status_code = 400
         return response
 
@@ -195,14 +228,15 @@ class LlmdJobPosts(http.Controller):
         return response
 
     @http.route('/jobs/my', type='http', auth='public', website=True, sitemap=False)
-    def llmd_my_jobs(self, posted=None, **kwargs):
+    def llmd_my_jobs(self, posted=None, edited=None, **kwargs):
         user = self._llmd_employer()
         if not user:
             return request.redirect('/web/login?redirect=/jobs/my')
         posts = request.env['llmd.job.listing'].sudo().with_context(active_test=False).search([('poster_id', '=', user.id), ('post_kind', '=', 'employer')], order='id desc')
         counts = {p.id: len(p.employer_applications()) for p in posts}
         just = posts.filtered(lambda p: str(p.id) == (posted or ''))
-        return request.render('llmd_job_aggregator.my_jobs', {'posts': posts, 'counts': counts, 'just_posted': just[:1], 'max_open': PO.MAX_OPEN_POSTS,
+        changed = posts.filtered(lambda p: str(p.id) == (edited or ''))
+        return request.render('llmd_job_aggregator.my_jobs', {'posts': posts, 'counts': counts, 'just_posted': just[:1], 'just_edited': changed[:1], 'max_open': PO.MAX_OPEN_POSTS,
                                                               'states': dict(PO.POST_STATES)})
 
     @http.route('/jobs/my/<int:post_id>/applicants', type='http', auth='public', website=True, sitemap=False)
