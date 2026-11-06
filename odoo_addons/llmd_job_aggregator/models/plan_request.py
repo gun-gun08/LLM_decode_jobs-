@@ -6,6 +6,8 @@ import re
 
 from markupsafe import Markup
 
+from datetime import timedelta
+
 from odoo import api, fields, models
 from odoo.addons.payment import utils as payment_utils
 
@@ -63,6 +65,10 @@ class LlmdPlanRequest(models.Model):
     credited = fields.Boolean(string='Credits added', readonly=True, copy=False)
     transaction_id = fields.Many2one('payment.transaction', string='Payment', readonly=True, copy=False)
     credits_left = fields.Integer(related='user_id.partner_id.llmd_job_credits', string='Credits left on the account')
+    paid_count = fields.Integer(string='Payments received', readonly=True, copy=False,
+                                help='How many times this plan was paid. More than one: the employer paid twice (e.g. paid again while the first payment was '
+                                     'still being confirmed) - every payment added its credits; refund one in Razorpay and take the credits back if needed.')
+    paid_twice = fields.Boolean(string='Paid more than once', compute='_compute_paid_twice', store=True)
     first_name = fields.Char(required=True)
     last_name = fields.Char(required=True)
     email = fields.Char(required=True)
@@ -78,6 +84,11 @@ class LlmdPlanRequest(models.Model):
         for rec in self:
             rec.name = '%s %s (%s)' % (rec.first_name or '', rec.last_name or '', rec.company or '')
 
+    @api.depends('paid_count')
+    def _compute_paid_twice(self):
+        for rec in self:
+            rec.paid_twice = rec.paid_count > 1
+
     def action_contacted(self):
         self.write({'state': 'contacted'})
 
@@ -88,14 +99,22 @@ class LlmdPlanRequest(models.Model):
         return True
 
     def _llmd_credit(self, tx=None):
-        """The plan is paid: its job credits go to the account (only once), the request is marked Paid."""
+        """A payment of the plan is done: its job credits go to the account and the request is marked Paid. Every payment counts once (an online
+        payment is remembered on its transaction): an employer who paid twice gets the credits of both payments, and the request shows "Paid more
+        than once" for our team. A payment marked by hand ("Paid", no transaction) counts only when the request has no payment yet."""
         self.ensure_one()
-        if self.credited:
+        tx = tx.sudo() if tx else tx
+        if (tx and tx.llmd_credited) or (not tx and self.credited):
             return
         partner = self.user_id.partner_id.sudo()
         if partner:
             partner.llmd_job_credits = (partner.llmd_job_credits or 0) + (self.jobs or PLANS.get(self.plan, {}).get('jobs', 0))
-        self.write({'state': 'paid', 'credited': bool(partner), 'transaction_id': tx.id if tx else self.transaction_id.id})
+        if tx:
+            tx.llmd_credited = True
+        self.write({'state': 'paid', 'credited': bool(partner), 'paid_count': (self.paid_count or 0) + 1,
+                    'transaction_id': self.transaction_id.id or (tx.id if tx else False)})
+        if self.paid_count > 1:
+            _logger.warning('plan request %s was paid %d times (last payment %s)', self.id, self.paid_count, tx.reference if tx else 'by hand')
 
     def payment_url(self):
         """Odoo's payment page for this request (amount, currency and partner signed by an access token, so they cannot be changed in the link)."""
@@ -133,6 +152,47 @@ class ResPartner(models.Model):
 
 class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
+
+    llmd_credited = fields.Boolean(string='Plan credits added', readonly=True, copy=False, help='The job credits of this plan payment were added to the account.')
+    llmd_razorpay_order_id = fields.Char(string='Razorpay order (plan)', readonly=True, copy=False,
+                                         help='The Razorpay order of a plan payment, kept so that the backup check can ask Razorpay what happened to it.')
+
+    def _get_specific_processing_values(self, processing_values):
+        """Keep the Razorpay order of a plan payment (Odoo does not store it) for the backup check below."""
+        res = super()._get_specific_processing_values(processing_values)
+        if self.provider_code == 'razorpay' and (self.reference or '').startswith(REF_PREFIX) and res.get('razorpay_order_id'):
+            self.sudo().llmd_razorpay_order_id = res['razorpay_order_id']
+        return res
+
+    def _llmd_razorpay_sync(self):
+        """Backup for a missed webhook: ask Razorpay about the order of each open plan payment and, when it was paid, process it exactly as Odoo
+        processes Razorpay's webhook (which then adds the job credits). Nothing happens for an order that was not paid; an error only goes to the log."""
+        for tx in self.sudo().filtered(lambda t: t.provider_code == 'razorpay' and t.state in ('draft', 'pending', 'authorized')
+                                       and t.llmd_razorpay_order_id and (t.reference or '').startswith(REF_PREFIX)):
+            try:
+                with self.env.cr.savepoint():
+                    data = tx.provider_id._send_api_request('GET', 'orders/%s/payments' % tx.llmd_razorpay_order_id)
+                    paid = [p for p in (data or {}).get('items', []) if p.get('status') in ('captured', 'authorized')]
+                    if paid:
+                        tx._process('razorpay', paid[0])
+                        if tx.state == 'done' and not tx.is_post_processed:
+                            tx._post_process()
+            except Exception:
+                _logger.warning('plan payment %s: the check with Razorpay failed', tx.reference, exc_info=True)
+
+    @api.model
+    def _cron_llmd_razorpay_sync(self):
+        """Every 10 minutes: the plan payments of the last 3 days that Razorpay has not confirmed to Odoo yet."""
+        since = fields.Datetime.now() - timedelta(days=3)
+        self.sudo().search([('provider_code', '=', 'razorpay'), ('state', 'in', ('draft', 'pending', 'authorized')), ('reference', '=like', REF_PREFIX + '%'),
+                            ('llmd_razorpay_order_id', '!=', False), ('create_date', '>=', since)], limit=50)._llmd_razorpay_sync()
+
+    @api.model
+    def llmd_sync_partner(self, partner):
+        """The open plan payments of one employer (the plan page and Post a job check them when the employer opens them)."""
+        since = fields.Datetime.now() - timedelta(days=3)
+        self.sudo().search([('partner_id', '=', partner.id), ('provider_code', '=', 'razorpay'), ('state', 'in', ('draft', 'pending', 'authorized')),
+                            ('reference', '=like', REF_PREFIX + '%'), ('llmd_razorpay_order_id', '!=', False), ('create_date', '>=', since)], limit=5)._llmd_razorpay_sync()
 
     def _post_process(self):
         """A done payment of a plan request (reference LLMDPLAN-<id>) adds the plan's job credits - when the amount and currency are the ones asked."""

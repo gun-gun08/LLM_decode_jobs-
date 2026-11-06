@@ -6,12 +6,14 @@ An employer only ever reads their OWN posts and the applications sent for them (
 import base64
 import logging
 import re
+import time
 
 from werkzeug.exceptions import NotFound
 
 from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
+from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
 
 from urllib.parse import quote
 
@@ -59,6 +61,7 @@ class LlmdJobPosts(http.Controller):
                 return request.redirect('/jobs/post')
             return self._llmd_employers_page(None)
         if request.httprequest.method != 'POST':
+            request.env['payment.transaction'].sudo().llmd_sync_partner(user.partner_id)      # credits of a plan whose webhook did not reach us yet
             return request.render('llmd_job_aggregator.post_form', self._llmd_form_values(user))
         if post.get('company_website'):                                 # hidden field that only bots fill in
             return request.redirect('/jobs')
@@ -153,6 +156,8 @@ class LlmdJobPosts(http.Controller):
         if not plan:
             raise NotFound()
         user = self._llmd_employer()
+        if user and request.httprequest.method != 'POST':                # a plan paid on Razorpay whose webhook did not reach us yet
+            request.env['payment.transaction'].sudo().llmd_sync_partner(user.partner_id)
         values = {'plan_code': plan_code, 'plan': plan, 'errors': {}, 'sent': False, 'post_days': PO.POST_DAYS, 'signed_in': bool(user),
                   'credits': user.partner_id.llmd_job_credits if user else 0}
         if request.httprequest.method != 'POST':
@@ -251,3 +256,18 @@ class LlmdJobPosts(http.Controller):
     def llmd_feed(self, **kwargs):
         posts = request.env['llmd.job.listing'].sudo().search([('post_kind', '=', 'llmdecode'), ('active', '=', True)], order=FEED_ORDER, limit=120)
         return request.render('llmd_job_aggregator.llmd_feed', {'posts': posts, 'card_cols': 'col-md-6 col-xl-4'})
+
+
+class LlmdPaymentStatus(PaymentPostProcessing):
+    """Odoo's payment status page asks every few seconds whether the payment is done. For a plan paid on Razorpay it also asks Razorpay itself
+    (at most every 10 seconds): without that the page waits for Razorpay's webhook, which never arrives on a local Odoo or when it is missed."""
+
+    @http.route()
+    def poll_status(self, **kwargs):
+        tx = self._get_monitored_transaction()
+        if tx and tx.provider_code == 'razorpay' and tx.state in ('draft', 'pending', 'authorized') and (tx.reference or '').startswith(PR.REF_PREFIX):
+            now = time.time()
+            if now - request.session.get('llmd_rzp_poll', 0) >= 10:
+                request.session['llmd_rzp_poll'] = now
+                tx._llmd_razorpay_sync()
+        return super().poll_status(**kwargs)

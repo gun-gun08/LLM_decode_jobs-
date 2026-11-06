@@ -94,12 +94,23 @@
         </t>
     </template>
 
+    <!-- backup for a missed Razorpay webhook: open plan payments are checked with Razorpay every 10 minutes (models/plan_request.py) -->
+    <record id="ir_cron_llmd_razorpay_sync" model="ir.cron">
+        <field name="name">LLMD: check plan payments with Razorpay</field>
+        <field name="model_id" ref="payment.model_payment_transaction"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_llmd_razorpay_sync()</field>
+        <field name="interval_number">10</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+
     <!-- backend: Job board > Plan requests -->
     <record id="llmd_plan_request_list" model="ir.ui.view">
         <field name="name">llmd.plan.request.list</field>
         <field name="model">llmd.plan.request</field>
         <field name="arch" type="xml">
-            <list decoration-info="state == 'new'" decoration-muted="state == 'cancel'" decoration-success="state == 'paid'">
+            <list decoration-info="state == 'new'" decoration-muted="state == 'cancel'" decoration-success="state == 'paid' and not paid_twice" decoration-warning="paid_twice">
                 <field name="create_date" string="Received"/>
                 <field name="plan"/>
                 <field name="company"/>
@@ -109,6 +120,8 @@
                 <field name="phone"/>
                 <field name="amount" sum="Total"/>
                 <field name="currency_id" column_invisible="1"/>
+                <field name="paid_count" string="Payments" optional="show"/>
+                <field name="paid_twice" column_invisible="1"/>
                 <field name="state" widget="badge"/>
             </list>
         </field>
@@ -126,6 +139,10 @@
                     <field name="state" widget="statusbar" statusbar_visible="new,contacted,paid"/>
                 </header>
                 <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="not paid_twice">
+                        This plan was paid <field name="paid_count" readonly="1" class="d-inline"/> times. Every payment added its job credits - refund the extra payment
+                        in Razorpay (and take its credits back on the employer) if the employer did not mean to buy twice.
+                    </div>
                     <group>
                         <group string="Plan">
                             <field name="plan"/>
@@ -136,6 +153,7 @@
                             <field name="user_id" readonly="1"/>
                             <field name="transaction_id"/>
                             <field name="credited"/>
+                            <field name="paid_twice" invisible="1"/>
                             <field name="credits_left"/>
                         </group>
                         <group string="Contact">

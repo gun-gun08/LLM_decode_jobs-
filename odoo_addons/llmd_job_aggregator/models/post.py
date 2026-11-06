@@ -111,7 +111,20 @@ class LlmdJobPost(models.Model):
     def write(self, vals):
         if 'post_department' in vals:
             vals['categories'] = dict(POST_DEPARTMENTS).get(vals['post_department'], '') if vals['post_department'] else ''
+        # an edit of a post's text (e.g. by our team in the backend) re-runs the work mode / job type / level guess from the text: keep what the
+        # employer chose in the form instead (only a field that is not written here and has a value)
+        keep = {}
+        if {'description_html', 'title', 'location', 'countries', 'employment_type', 'seniority'} & set(vals) and not self.env.context.get('llmd_sync'):
+            for rec in self.filtered('post_kind'):
+                kept = {f: rec[f] for f in ('work_mode', 'job_type', 'exp_level') if f not in vals and rec[f]}
+                if kept:
+                    keep[rec.id] = kept
         res = super().write(vals)
+        for rec_id, kept in keep.items():
+            rec = self.browse(rec_id)
+            changed = {f: v for f, v in kept.items() if rec[f] != v}
+            if changed:
+                super(LlmdJobPost, rec.with_context(llmd_sync=True)).write(changed)
         if 'location' in vals and not self.env.context.get('llmd_post_derived'):
             self.filtered('post_kind')._post_place()
         if not self.env.context.get('llmd_post_derived') and set(POST_FIELDS) & set(vals):
@@ -220,7 +233,10 @@ class LlmdJobPost(models.Model):
         html = text_to_html(form['description']) or str(Markup('<p>%s</p>') % (
             'The full description of this job is in the attached PDF.' if form.get('has_pdf') else 'The full description of this job is on the original job posting.'))
         if form.get('experience'):
-            html += str(Markup('<p>Experience: %s</p>') % form['experience'])
+            exp = form['experience'].strip()
+            if re.fullmatch(r'\d{1,2}\s*(?:(?:-|–|to)\s*\d{1,2})?\s*\+?', exp):      # the form's field is in years: "0-2" -> "0-2 years"
+                exp += ' years'
+            html += str(Markup('<p>Experience: %s.</p>') % exp)
         if form.get('skills'):
             html += str(Markup('<h3>Skills</h3><ul>%s</ul>') % Markup('').join(Markup('<li>%s</li>') % s for s in form['skills']))
         vals = {'post_kind': 'employer', 'poster_id': user.id, 'contact_email': user.email or user.login, 'title': form['title'], 'company': form['company'],

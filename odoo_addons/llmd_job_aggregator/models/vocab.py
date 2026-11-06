@@ -58,7 +58,7 @@ SKILLS = [
     ('Machine Learning', 'machine learning|\\bml\\b'),
     ('Deep Learning', 'deep learning|neural networks?'),
     ('NLP', '\\bnlp\\b|natural language'),
-    ('LLMs', '\\bllms?\\b|large language models?'),
+    ('LLMs', '\\bllms?\\b(?![ -]?decode)|large language models?'),
     ('Generative AI', 'generative ai|\\bgenai\\b'),
     ('Prompt Engineering', 'prompt engineering'),
     ('RAG', '\\brag\\b|retrieval[- ]augmented'),
