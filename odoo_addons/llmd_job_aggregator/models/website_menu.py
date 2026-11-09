@@ -24,9 +24,23 @@ class WebsiteMenu(models.Model):
         return super()._is_active()
 
     @api.model
+    def _llmd_hire_websites(self):
+        """The websites that show "Hire Talent": the job board's own website(s) - a domain starting with "jobs." (jobs.llmdecode.ai), not learn.llmdecode.com.
+        With no such domain (a local database with one website and no domain) every website, as before."""
+        websites = self.env['website'].search([])
+        def host(w):
+            d = (w.domain or '').strip()
+            return (urlsplit(d if '://' in d else '//' + d).hostname or '').lower()
+        return websites.filtered(lambda w: host(w).startswith('jobs.')) or websites
+
+    @api.model
     def _llmd_ensure_hire_menu(self):
-        """Every website whose menu has the Jobs page gets "Hire Talent" (the page for companies) right after it - once; nothing else in the menu changes."""
-        for website in self.env['website'].search([]):
+        """The job board's website gets "Hire Talent" (the page for companies) right after its Jobs menu - once; the other websites (learn.llmdecode.com) have none.
+        Nothing else in the menu changes."""
+        hire_sites = self._llmd_hire_websites()
+        self.search([('website_id', 'not in', hire_sites.ids), ('website_id', '!=', False)]).filtered(
+            lambda m: urlsplit(m.url or '').path.rstrip('/') == HIRE_URL).unlink()
+        for website in hire_sites:
             menus = self.search([('website_id', '=', website.id)])
             if menus.filtered(lambda m: urlsplit(m.url or '').path.rstrip('/') == HIRE_URL):
                 continue
