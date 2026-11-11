@@ -33,7 +33,7 @@ class LlmdCompany(models.Model):
     _description = 'Job board company'
     _order = 'name'
 
-    name = fields.Char(required=True, index=True)
+    name = fields.Char(required=True, index=True, help='The name shown on the company page. Editable: the jobs stay linked (they match the key, the name the jobs write).')
     key = fields.Char(required=True, index=True, readonly=True, help='The name in lower case with single spaces: the jobs that name this company.')
     slug = fields.Char(required=True, index=True, readonly=True, copy=False, help='The address of its page: /companies/<slug>. Set once, then kept.')
     listing_ids = fields.One2many('llmd.job.listing', 'company_id', string='Jobs')
@@ -68,6 +68,8 @@ class LlmdCompany(models.Model):
         return {name: found[company_key(name)] for name in names if name and name.strip()}
 
     def write(self, vals):
+        if 'name' in vals:                                              # a new display name only: the key (the name the jobs write) stays, so the jobs keep their company
+            vals['name'] = (vals['name'] or '').strip() or False
         if vals.get('linkedin'):                                        # a pasted link of any page of it (posts, about ...) -> the company page itself
             vals['linkedin'] = linkedin_of(vals['linkedin']) or vals['linkedin'].strip()
         return super().write(vals)
