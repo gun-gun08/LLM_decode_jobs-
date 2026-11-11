@@ -9,8 +9,8 @@
                 <field name="sequence" widget="handle"/>
                 <field name="id" string="ID"/>
                 <field name="name"/>
-                <field name="limit" string="Jobs"/>
-                <field name="post_limited" string="Open at once"/>
+                <field name="limit"/>
+                <field name="post_limited"/>
                 <field name="product_id" optional="show"/>
                 <field name="currency_id" column_invisible="True"/>
                 <field name="amount"/>
@@ -38,8 +38,8 @@
                         </div>
                         <div class="o_llmd_pkg_price"><field name="amount" widget="monetary"/></div>
                         <div class="d-flex flex-wrap gap-2 mt-2">
-                            <span class="o_llmd_pkg_pill"><i class="fa fa-briefcase" title="Jobs"/> <field name="limit"/> jobs</span>
-                            <span class="o_llmd_pkg_pill"><i class="fa fa-folder-open" title="Open at once"/> <field name="post_limited"/> open at once</span>
+                            <span class="o_llmd_pkg_pill"><i class="fa fa-briefcase" title="Jobs"/> Job limit: <field name="limit"/></span>
+                            <span class="o_llmd_pkg_pill"><i class="fa fa-folder-open" title="Open at once"/> Post limit: <field name="post_limited"/></span>
                         </div>
                         <div t-if="record.product_id.raw_value" class="o_llmd_pkg_product"><i class="fa fa-cube" title="Product"/> <field name="product_id"/></div>
                         <footer class="d-flex justify-content-between align-items-center pt-2 mt-auto">
@@ -64,12 +64,12 @@
                         <h1><field name="name" placeholder="e.g. Bundle of 3"/></h1>
                     </div>
                     <group>
-                        <group string="What the employer gets">
-                            <field name="limit" string="Jobs"/>
-                            <field name="post_limited" string="Open at once"/>
+                        <group>
+                            <field name="limit"/>
+                            <field name="post_limited"/>
                             <field name="active"/>
                         </group>
-                        <group string="Price">
+                        <group>
                             <field name="amount"/>
                             <field name="currency_id"/>
                             <field name="product_id"/>
@@ -95,7 +95,7 @@
     <record id="llmd_hr_package_action" model="ir.actions.act_window">
         <field name="name">Packages</field>
         <field name="res_model">llmd.hr.package</field>
-        <field name="view_mode">kanban,list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="search_view_id" ref="llmd_hr_package_search"/>
         <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No packages yet</p><p>A package is what employers buy on the page for companies: a name, how many jobs and the price.</p></field>
     </record>
