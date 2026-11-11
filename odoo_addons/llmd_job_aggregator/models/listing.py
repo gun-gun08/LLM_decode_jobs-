@@ -549,6 +549,9 @@ class LlmdJobListing(models.Model):
         if not overview or overview.startswith((self.title or '').rstrip('.') + ' role'):
             overview = self.short_description or ''
         overview = re.sub(r'\s+', ' ', overview).strip()
+        if TE.has_cjk(overview):                                        # written in Chinese / Japanese / Korean: only its English sentences, else no text
+            english = ' '.join(p for p in re.split(r'(?<=[.!?;。！？；])\s*', overview) if p and not TE.has_cjk(p)).strip()
+            overview = english if len(english) >= 40 else ''
         return overview if len(overview) <= limit else overview[:limit].rsplit(' ', 1)[0].rstrip(',;:-') + '…'
 
     def years_label(self):
