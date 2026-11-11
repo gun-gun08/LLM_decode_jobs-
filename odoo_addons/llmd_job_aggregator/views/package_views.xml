@@ -1,21 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Job board > Packages: the paid packages of the page for companies (llmd.hr.package) -->
+    <!-- Job board > Packages: the paid packages of the page for companies (llmd.hr.package) - price cards first, then the list and the form -->
     <record id="llmd_hr_package_list" model="ir.ui.view">
         <field name="name">llmd.hr.package.list</field>
         <field name="model">llmd.hr.package</field>
         <field name="arch" type="xml">
-            <list class="o_llmd_pkg_list">
+            <list class="o_llmd_pkg_list" decoration-muted="not active">
                 <field name="sequence" widget="handle"/>
-                <field name="id" optional="show"/>
-                <field name="name"/>
-                <field name="limit"/>
-                <field name="post_limited"/>
-                <field name="product_id" optional="show"/>
+                <field name="id" string="ID" width="60px"/>
+                <field name="name" class="fw-bold"/>
+                <field name="limit" string="Jobs" width="110px"/>
+                <field name="post_limited" string="Open at once" width="130px"/>
+                <field name="product_id" optional="show" width="220px"/>
                 <field name="currency_id" column_invisible="True"/>
-                <field name="amount" width="140px"/>
-                <field name="active" widget="boolean_toggle"/>
+                <field name="amount" width="150px" class="fw-bold"/>
+                <field name="active" widget="boolean_toggle" width="90px"/>
             </list>
+        </field>
+    </record>
+
+    <record id="llmd_hr_package_kanban" model="ir.ui.view">
+        <field name="name">llmd.hr.package.kanban</field>
+        <field name="model">llmd.hr.package</field>
+        <field name="arch" type="xml">
+            <kanban class="o_llmd_pkg_kanban" quick_create="false" default_order="sequence, amount, id">
+                <field name="currency_id"/>
+                <field name="active"/>
+                <field name="product_id"/>
+                <field name="amount"/>
+                <templates>
+                    <t t-name="card" class="o_llmd_pkg_card">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <field name="name" class="o_llmd_pkg_name"/>
+                            <span t-if="!record.active.raw_value" class="badge text-bg-secondary">Archived</span>
+                            <span t-elif="record.amount.raw_value == 0" class="badge text-bg-success">Free</span>
+                            <span t-else="" class="badge o_llmd_pkg_paid">Paid</span>
+                        </div>
+                        <div class="o_llmd_pkg_price"><field name="amount" widget="monetary"/></div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <span class="o_llmd_pkg_pill"><i class="fa fa-briefcase" title="Jobs"/> <field name="limit"/> jobs</span>
+                            <span class="o_llmd_pkg_pill"><i class="fa fa-folder-open" title="Open at once"/> <field name="post_limited"/> open at once</span>
+                        </div>
+                        <div t-if="record.product_id.raw_value" class="o_llmd_pkg_product"><i class="fa fa-cube" title="Product"/> <field name="product_id"/></div>
+                        <footer class="d-flex justify-content-between align-items-center pt-2 mt-auto">
+                            <span class="o_llmd_pkg_id">ID <field name="id"/></span>
+                            <field name="active" widget="boolean_toggle"/>
+                        </footer>
+                    </t>
+                </templates>
+            </kanban>
         </field>
     </record>
 
@@ -26,14 +59,17 @@
             <form>
                 <sheet>
                     <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
-                    <h1><field name="name" placeholder="e.g. Bundle of 3"/></h1>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="e.g. Bundle of 3"/></h1>
+                    </div>
                     <group>
-                        <group>
-                            <field name="limit"/>
-                            <field name="post_limited"/>
+                        <group string="What the employer gets">
+                            <field name="limit" string="Jobs"/>
+                            <field name="post_limited" string="Open at once"/>
                             <field name="active"/>
                         </group>
-                        <group>
+                        <group string="Price">
                             <field name="amount"/>
                             <field name="currency_id"/>
                             <field name="product_id"/>
@@ -59,7 +95,7 @@
     <record id="llmd_hr_package_action" model="ir.actions.act_window">
         <field name="name">Packages</field>
         <field name="res_model">llmd.hr.package</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="llmd_hr_package_search"/>
         <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No packages yet</p><p>A package is what employers buy on the page for companies: a name, how many jobs and the price.</p></field>
     </record>

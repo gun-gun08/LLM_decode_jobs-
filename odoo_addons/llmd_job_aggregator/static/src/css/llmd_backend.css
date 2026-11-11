@@ -1,12 +1,53 @@
-/* Job board > Packages: room between the columns (Job limit, Post limit, Currency, Amount, Active) */
-.o_llmd_pkg_list .o_list_table th:not(.o_list_record_selector):not(.o_handle_cell),
-.o_llmd_pkg_list .o_list_table td:not(.o_list_record_selector):not(.o_handle_cell) {
-    padding-left: 28px !important;
-    padding-right: 28px !important;
-}
-.o_llmd_pkg_list .o_list_table th[data-name="currency_id"],
-.o_llmd_pkg_list .o_list_table td[name="currency_id"],
-.o_llmd_pkg_list .o_list_table th[data-name="active"],
-.o_llmd_pkg_list .o_list_table td[name="active"] {
+/* Job board > Packages - the list: compact columns, centred numbers and toggle */
+.o_llmd_pkg_list .o_list_table th[data-name="id"], .o_llmd_pkg_list .o_list_table td[name="id"],
+.o_llmd_pkg_list .o_list_table th[data-name="limit"], .o_llmd_pkg_list .o_list_table td[name="limit"],
+.o_llmd_pkg_list .o_list_table th[data-name="post_limited"], .o_llmd_pkg_list .o_list_table td[name="post_limited"],
+.o_llmd_pkg_list .o_list_table th[data-name="active"], .o_llmd_pkg_list .o_list_table td[name="active"] {
     text-align: center !important;
 }
+.o_llmd_pkg_list .o_list_table th[data-name="id"] .d-flex, .o_llmd_pkg_list .o_list_table th[data-name="limit"] .d-flex,
+.o_llmd_pkg_list .o_list_table th[data-name="post_limited"] .d-flex, .o_llmd_pkg_list .o_list_table th[data-name="active"] .d-flex,
+.o_llmd_pkg_list .o_list_table td[name="active"] .o_field_widget {
+    justify-content: center;
+}
+.o_llmd_pkg_list .o_list_table td[name="limit"], .o_llmd_pkg_list .o_list_table td[name="post_limited"] {
+    font-weight: 600;
+    color: #4f46e5;
+}
+
+/* Job board > Packages - the price cards */
+.o_llmd_pkg_kanban .o_kanban_record.o_llmd_pkg_card {
+    border: 1px solid #e5e7f0;
+    border-top: 4px solid #4f46e5;
+    border-radius: 14px;
+    padding: 18px 18px 12px;
+    min-height: 190px;
+    box-shadow: 0 6px 18px rgba(79, 70, 229, .08);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.o_llmd_pkg_kanban .o_kanban_record.o_llmd_pkg_card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px rgba(79, 70, 229, .16);
+}
+.o_llmd_pkg_kanban .o_llmd_pkg_name { font-size: 1.15rem; font-weight: 700; color: #111827; }
+.o_llmd_pkg_kanban .o_llmd_pkg_price {
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-top: 6px;
+    color: #4338ca;
+}
+.o_llmd_pkg_kanban .o_llmd_pkg_pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: .85rem;
+    font-weight: 600;
+}
+.o_llmd_pkg_kanban .o_llmd_pkg_paid { background: #ede9fe; color: #5b21b6; }
+.o_llmd_pkg_kanban .o_llmd_pkg_product { margin-top: 10px; color: #6b7280; font-size: .85rem; }
+.o_llmd_pkg_kanban .o_llmd_pkg_id { color: #9ca3af; font-size: .8rem; }
