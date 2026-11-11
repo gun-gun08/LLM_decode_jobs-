@@ -1,0 +1,12 @@
+/* Job board > Packages: room between the columns (Job limit, Post limit, Currency, Amount, Active) */
+.o_llmd_pkg_list .o_list_table th:not(.o_list_record_selector):not(.o_handle_cell),
+.o_llmd_pkg_list .o_list_table td:not(.o_list_record_selector):not(.o_handle_cell) {
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+}
+.o_llmd_pkg_list .o_list_table th[data-name="currency_id"],
+.o_llmd_pkg_list .o_list_table td[name="currency_id"],
+.o_llmd_pkg_list .o_list_table th[data-name="active"],
+.o_llmd_pkg_list .o_list_table td[name="active"] {
+    text-align: center !important;
+}
