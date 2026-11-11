@@ -9,4 +9,5 @@ from . import sync
 from . import website_menu
 from . import post
 from . import partner
+from . import package
 from . import plan_request

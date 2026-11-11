@@ -134,32 +134,37 @@
                                 </ul>
                                 <a t-att-href="cta_href" class="btn o_llmd_btn_primary" data-llmd-auth="1">Post for free</a>
                             </div>
-                            <div class="o_llmd_emp_plan o_llmd_plan_one" data-llmd-reveal="up" data-llmd-delay="1">
+                            <!-- the two paid cards read Job board > Packages (llmd.hr.package): name, price, jobs; an archived package is not shown -->
+                            <t t-set="pkg1" t-value="request.env.ref('llmd_job_aggregator.package_bundle', raise_if_not_found=False)"/>
+                            <t t-set="pkg2" t-value="request.env.ref('llmd_job_aggregator.package_pack', raise_if_not_found=False)"/>
+                            <t t-set="pkg1" t-value="pkg1 and pkg1.sudo().active and pkg1.sudo().plan_values()"/>
+                            <t t-set="pkg2" t-value="pkg2 and pkg2.sudo().active and pkg2.sudo().plan_values()"/>
+                            <div t-if="pkg1" class="o_llmd_emp_plan o_llmd_plan_one" data-llmd-reveal="up" data-llmd-delay="1">
                                 <span class="o_llmd_emp_badge">Recommended</span>
                                 <span class="o_llmd_plan_ic"><i class="fa fa-briefcase" aria-hidden="true"/></span>
-                                <h3>Bundle of 3</h3>
+                                <h3 t-out="pkg1['name']"/>
                                 <p class="o_llmd_plan_for">For a few more roles</p>
-                                <p class="o_llmd_emp_price">₹1,000 <small>for 3 jobs</small></p>
+                                <p class="o_llmd_emp_price"><t t-out="pkg1['currency']"/><t t-out="'{:,}'.format(pkg1['price'])"/> <small t-out="'for %s jobs' % pkg1['jobs']"/></p>
                                 <ul>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Everything in Free</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Use them across several roles</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Close or reopen any job from My jobs</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Apply on our form or your own page</li>
                                 </ul>
-                                <a href="/jobs/plan/bundle" class="btn o_llmd_btn_primary">Post 3 jobs</a>
+                                <a t-attf-href="/jobs/plan/#{pkg1['code']}" class="btn o_llmd_btn_primary">Post <t t-out="pkg1['jobs']"/> jobs</a>
                             </div>
-                            <div class="o_llmd_emp_plan o_llmd_plan_team" data-llmd-reveal="up" data-llmd-delay="2">
+                            <div t-if="pkg2" class="o_llmd_emp_plan o_llmd_plan_team" data-llmd-reveal="up" data-llmd-delay="2">
                                 <span class="o_llmd_plan_ic"><i class="fa fa-users" aria-hidden="true"/></span>
-                                <h3>Hiring pack</h3>
+                                <h3 t-out="pkg2['name']"/>
                                 <p class="o_llmd_plan_for">For teams hiring for several roles</p>
-                                <p class="o_llmd_emp_price">₹5,000 <small>up to <t t-out="max_open"/> jobs</small></p>
+                                <p class="o_llmd_emp_price"><t t-out="pkg2['currency']"/><t t-out="'{:,}'.format(pkg2['price'])"/> <small t-out="'up to %s jobs' % pkg2['jobs']"/></p>
                                 <ul>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Everything in Bundle of 3</li>
+                                    <li t-if="pkg1"><i class="fa fa-check" aria-hidden="true"/> Everything in <t t-out="pkg1['name']"/></li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Use it across roles and cities</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> All applicants in one My jobs page</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Help from the LLM Decode team</li>
                                 </ul>
-                                <a href="/jobs/plan/pack" class="btn o_llmd_btn_primary">Post <t t-out="max_open"/> jobs</a>
+                                <a t-attf-href="/jobs/plan/#{pkg2['code']}" class="btn o_llmd_btn_primary">Post <t t-out="pkg2['jobs']"/> jobs</a>
                             </div>
                         </div>
                         <p class="o_llmd_plans_note" data-llmd-reveal="up"><i class="fa fa-calendar" aria-hidden="true"/> Need more jobs or want to see it first? <a href="/contactus">Book a free demo</a></p>
@@ -171,7 +176,7 @@
                     <div class="container o_llmd_emp_narrow">
                         <div class="o_llmd_faq" data-llmd-reveal="up">
                             <h2 class="o_llmd_h2">Questions</h2>
-                            <details class="o_llmd_faq_item"><summary>What does it cost? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Your first job is free. After that it is ₹1,000 for 3 jobs, or ₹5,000 for up to <t t-out="max_open"/> jobs. Need more, or want to see it first? Book a free demo.</p></details>
+                            <details class="o_llmd_faq_item"><summary>What does it cost? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Your first job is free. <t t-set="faq_pk" t-value="request.env['llmd.hr.package'].sudo().search([])"/>After that you buy a package<t t-if="faq_pk">: <t t-foreach="faq_pk" t-as="pk"><t t-out="pk.currency_id.symbol"/><t t-out="'{:,}'.format(pk.plan_values()['price'])"/> for <t t-out="pk.plan_values()['jobs']"/> jobs<t t-if="not pk_last">, or </t></t></t>. Need more, or want to see it first? Book a free demo.</p></details>
                             <details class="o_llmd_faq_item"><summary>Why is my job checked first? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>So that every job on the board is a real job from a real company. You get an e-mail when it is live - or the reason when it is not.</p></details>
                             <details class="o_llmd_faq_item"><summary>Where do I see the applicants? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Under My jobs: every application with the name, e-mail, message and resume. You also get an e-mail for each new one.</p></details>
                             <details class="o_llmd_faq_item"><summary>Can people apply on our own careers page? <i class="fa fa-chevron-down o_llmd_chev" aria-hidden="true"/></summary><p>Yes. Choose "On my own application page" and add its link: Apply Now then opens your page.</p></details>

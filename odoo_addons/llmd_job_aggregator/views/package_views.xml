@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Job board > Packages: the paid packages of the page for companies (llmd.hr.package) -->
+    <record id="llmd_hr_package_list" model="ir.ui.view">
+        <field name="name">llmd.hr.package.list</field>
+        <field name="model">llmd.hr.package</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="id" optional="show"/>
+                <field name="name"/>
+                <field name="limit"/>
+                <field name="post_limited"/>
+                <field name="amount"/>
+                <field name="currency_id"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="llmd_hr_package_form" model="ir.ui.view">
+        <field name="name">llmd.hr.package.form</field>
+        <field name="model">llmd.hr.package</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <h1><field name="name" placeholder="e.g. Bundle of 3"/></h1>
+                    <group>
+                        <group>
+                            <field name="limit"/>
+                            <field name="post_limited"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                            <field name="id" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="llmd_hr_package_search" model="ir.ui.view">
+        <field name="name">llmd.hr.package.search</field>
+        <field name="model">llmd.hr.package</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="llmd_hr_package_action" model="ir.actions.act_window">
+        <field name="name">Packages</field>
+        <field name="res_model">llmd.hr.package</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="llmd_hr_package_search"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No packages yet</p><p>A package is what employers buy on the page for companies: a name, how many jobs and the price.</p></field>
+    </record>
+
+    <menuitem id="llmd_hr_package_menu" name="Packages" parent="llmd_job_board_menu" action="llmd_hr_package_action" sequence="14"
+              groups="hr_recruitment.group_hr_recruitment_manager"/>
+</odoo>

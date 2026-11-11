@@ -17,3 +17,6 @@ access_llmd_company_admin,llmd.company admin,model_llmd_company,base.group_syste
 access_llmd_company_manager,llmd.company manager,model_llmd_company,hr_recruitment.group_hr_recruitment_manager,1,1,0,0
 access_llmd_plan_request_manager,llmd.plan.request manager,model_llmd_plan_request,hr_recruitment.group_hr_recruitment_manager,1,1,0,0
 access_llmd_plan_request_admin,llmd.plan.request admin,model_llmd_plan_request,base.group_system,1,1,1,1
+access_llmd_hr_package_user,llmd.hr.package user,model_llmd_hr_package,hr_recruitment.group_hr_recruitment_user,1,0,0,0
+access_llmd_hr_package_manager,llmd.hr.package manager,model_llmd_hr_package,hr_recruitment.group_hr_recruitment_manager,1,1,1,1
+access_llmd_hr_package_admin,llmd.hr.package admin,model_llmd_hr_package,base.group_system,1,1,1,1

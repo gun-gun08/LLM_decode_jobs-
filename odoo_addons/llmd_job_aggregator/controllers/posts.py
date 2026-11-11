@@ -185,9 +185,10 @@ class LlmdJobPosts(http.Controller):
     @http.route('/jobs/plan/<string:plan_code>', type='http', auth='public', website=True, methods=['GET', 'POST'], sitemap=False)
     def llmd_plan_request(self, plan_code, **post):
         """The request page of a paid plan: a short contact form; our team gets in touch about the payment (nothing is paid on the website)."""
-        plan = PR.PLANS.get(plan_code)
-        if not plan:
+        package = request.env['llmd.hr.package'].sudo().by_code(plan_code)      # Job board > Packages: "bundle", "pack" or the package ID
+        if not package:
             raise NotFound()
+        plan = package.plan_values()
         user = self._llmd_employer()
         if user and request.httprequest.method != 'POST':                # a plan paid on Razorpay whose webhook did not reach us yet
             request.env['payment.transaction'].sudo().llmd_sync_partner(user.partner_id)
@@ -209,10 +210,12 @@ class LlmdJobPosts(http.Controller):
         if not errors:
             try:
                 with request.env.cr.savepoint():
-                    inr = request.env.ref('base.INR').sudo()
-                    if not inr.active:                                  # Razorpay takes Indian rupees
-                        inr.active = True
-                    rec = request.env['llmd.plan.request'].sudo().create(dict(vals, plan=plan_code, user_id=user.id, amount=plan['price'], currency_id=inr.id, jobs=plan['jobs']))
+                    currency = package.currency_id.sudo()
+                    if not currency.active:                             # Razorpay takes Indian rupees: the packages are in INR
+                        currency.active = True
+                    rec = request.env['llmd.plan.request'].sudo().create(dict(
+                        vals, plan=plan_code if plan_code in PR.PLANS else False, package_id=package.id, user_id=user.id, amount=package.amount,
+                        currency_id=currency.id, jobs=package.limit if package.post_limited else 0, unlimited=not package.post_limited))
                     partner = user.partner_id.sudo()
                     partner.write({k: v for k, v in (('phone', vals['phone']), ('website', vals['company_site']), ('company_name', vals['company']),
                                                      ('llmd_linkedin', vals['linkedin'])) if v and not partner[k]})

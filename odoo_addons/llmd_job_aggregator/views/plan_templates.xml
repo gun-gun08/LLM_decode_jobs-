@@ -112,7 +112,8 @@
         <field name="arch" type="xml">
             <list decoration-info="state == 'new'" decoration-muted="state == 'cancel'" decoration-success="state == 'paid' and not paid_twice" decoration-warning="paid_twice">
                 <field name="create_date" string="Received"/>
-                <field name="plan"/>
+                <field name="package_id"/>
+                <field name="plan" optional="hide"/>
                 <field name="company"/>
                 <field name="first_name"/>
                 <field name="last_name"/>
@@ -145,7 +146,9 @@
                     </div>
                     <group>
                         <group string="Plan">
-                            <field name="plan"/>
+                            <field name="package_id"/>
+                            <field name="plan" invisible="not plan"/>
+                            <field name="unlimited" invisible="not unlimited"/>
                             <field name="amount"/>
                             <field name="currency_id"/>
                             <field name="jobs"/>

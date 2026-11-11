@@ -57,7 +57,9 @@ class LlmdPlanRequest(models.Model):
     _order = 'create_date desc, id desc'
 
     name = fields.Char(string='Contact', compute='_compute_name', store=True)
-    plan = fields.Selection([(code, plan_label(code)) for code in PLANS], required=True)
+    plan = fields.Selection([(code, plan_label(code)) for code in PLANS], help='The plan of the first requests (before Job board > Packages).')
+    package_id = fields.Many2one('llmd.hr.package', string='Package', ondelete='set null', index=True)
+    unlimited = fields.Boolean(string='Unlimited posts', help='The package has no job limit: once paid, the account posts without using credits.')
     state = fields.Selection([('new', 'Waiting for payment'), ('contacted', 'Contacted'), ('paid', 'Paid'), ('cancel', 'Cancelled')], default='new', required=True, index=True)
     amount = fields.Float(string='Amount', digits=(12, 2))
     currency_id = fields.Many2one('res.currency', string='Currency')
@@ -108,7 +110,10 @@ class LlmdPlanRequest(models.Model):
             return
         partner = self.user_id.partner_id.sudo()
         if partner:
-            partner.llmd_job_credits = (partner.llmd_job_credits or 0) + (self.jobs or PLANS.get(self.plan, {}).get('jobs', 0))
+            if self.unlimited:
+                partner.llmd_unlimited_posts = True
+            else:
+                partner.llmd_job_credits = (partner.llmd_job_credits or 0) + (self.jobs or PLANS.get(self.plan or '', {}).get('jobs', 0))
         if tx:
             tx.llmd_credited = True
         self.write({'state': 'paid', 'credited': bool(partner), 'paid_count': (self.paid_count or 0) + 1,
@@ -148,6 +153,7 @@ class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     llmd_job_credits = fields.Integer(string='Job credits', default=0, help='Paid jobs this employer can still post on the job board (the first job is free).')
+    llmd_unlimited_posts = fields.Boolean(string='Unlimited job posts', help='Bought a package without a job limit: posts use no credits (still at most the open jobs allowed at once).')
 
 
 class PaymentTransaction(models.Model):
