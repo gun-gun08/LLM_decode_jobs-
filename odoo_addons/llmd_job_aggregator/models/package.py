@@ -22,6 +22,36 @@ class LlmdHrPackage(models.Model):
     active = fields.Boolean(default=True, help='Archived packages are not offered on the website.')
     amount = fields.Monetary(required=True, currency_field='currency_id', help='The price the employer pays online (Razorpay).')
     currency_id = fields.Many2one('res.currency', string='Currency', required=True, default=lambda self: self.env.ref('base.INR', raise_if_not_found=False))
+    product_id = fields.Many2one('product.product', string='Product', ondelete='restrict', copy=False,
+                                 help='The service product of this package (for invoices and accounting). Made with the package; its name and price follow the package.')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._llmd_sync_products()
+        return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        if {'name', 'amount', 'product_id', 'active'} & set(vals):
+            self._llmd_sync_products()
+        return res
+
+    def _llmd_sync_products(self):
+        """Every package has its service product: made when missing, its name, price and Active kept like the package's."""
+        Product = self.env['product.product'].sudo()
+        for rec in self.with_context(active_test=False):
+            vals = {'name': rec.name, 'list_price': rec.amount, 'active': rec.active}
+            if not rec.product_id:
+                product = Product.create(dict(vals, type='service', sale_ok=True, purchase_ok=False, default_code='LLMD-PKG-%d' % rec.id))
+                super(LlmdHrPackage, rec).write({'product_id': product.id})
+            elif any(rec.product_id[k] != v for k, v in vals.items()):
+                rec.product_id.sudo().write(vals)
+
+    @api.model
+    def _llmd_ensure_products(self):
+        """Every module update: the packages without a product get one (the packages made before the Product field)."""
+        self.with_context(active_test=False).search([])._llmd_sync_products()
 
     @api.constrains('amount', 'limit', 'post_limited')
     def _check_values(self):

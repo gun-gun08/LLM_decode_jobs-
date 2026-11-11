@@ -11,6 +11,7 @@
                 <field name="name"/>
                 <field name="limit"/>
                 <field name="post_limited"/>
+                <field name="product_id" optional="show"/>
                 <field name="currency_id" width="110px"/>
                 <field name="amount" width="140px"/>
                 <field name="active" widget="boolean_toggle"/>
@@ -35,6 +36,7 @@
                         <group>
                             <field name="amount"/>
                             <field name="currency_id"/>
+                            <field name="product_id"/>
                             <field name="id" readonly="1"/>
                         </group>
                     </group>
@@ -64,4 +66,6 @@
 
     <menuitem id="llmd_hr_package_menu" name="Packages" parent="llmd_job_board_menu" action="llmd_hr_package_action" sequence="14"
               groups="hr_recruitment.group_hr_recruitment_manager"/>
+    <!-- the packages made before the Product field get their service product -->
+    <function model="llmd.hr.package" name="_llmd_ensure_products"/>
 </odoo>
