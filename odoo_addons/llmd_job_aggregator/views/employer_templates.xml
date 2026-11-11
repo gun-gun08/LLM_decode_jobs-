@@ -121,11 +121,12 @@
                             <p class="o_llmd_emp_plans_sub">Every job is checked by our team, shown across the board and matched to LLM Decode courses. Applicants and resumes are managed on your My jobs page.</p>
                         </div>
                         <div class="o_llmd_emp_plans o_llmd_emp_plans3 o_llmd_plans2">
-                            <div class="o_llmd_emp_plan o_llmd_plan_free" data-llmd-reveal="up" data-llmd-delay="0">
+                            <t t-set="pkg0" t-value="request.env['llmd.hr.package'].sudo().free_package()"/>
+                            <div t-if="pkg0" class="o_llmd_emp_plan o_llmd_plan_free" data-llmd-reveal="up" data-llmd-delay="0">
                                 <span class="o_llmd_plan_ic"><i class="fa fa-paper-plane" aria-hidden="true"/></span>
-                                <h3>Free</h3>
+                                <h3 t-out="pkg0.name"/>
                                 <p class="o_llmd_plan_for">Try it with your first job</p>
-                                <p class="o_llmd_emp_price">₹0 <small>1 job</small></p>
+                                <p class="o_llmd_emp_price"><t t-out="pkg0.currency_id.symbol"/>0 <small t-out="'%s job%s' % (pkg0.limit, '' if pkg0.limit == 1 else 's')"/></p>
                                 <ul>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Live on the board for <t t-out="post_days"/> days</li>
                                     <li><i class="fa fa-check" aria-hidden="true"/> Shown on industry, company and city pages</li>

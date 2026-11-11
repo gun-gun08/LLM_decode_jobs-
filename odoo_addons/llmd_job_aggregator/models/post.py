@@ -222,12 +222,20 @@ class LlmdJobPost(models.Model):
     @api.model
     def max_open_of(self, user):
         """How many jobs this employer may have open (pending + live) at once: the post limit of the packages bought, else the default."""
-        return max(MAX_OPEN_POSTS, user.partner_id.sudo().llmd_max_open or 0)
+        free = self.env['llmd.hr.package'].free_package()
+        partner = user.partner_id.sudo()
+        base = free.post_limited if free else MAX_OPEN_POSTS
+        if partner.llmd_job_credits and not partner.llmd_max_open:      # credits from before the post limits (or added by hand): the old default
+            base = max(base, MAX_OPEN_POSTS)
+        return max(base, partner.llmd_max_open or 0)
 
     @api.model
     def free_post_left(self, user):
-        """The first job of an account is free (a rejected one does not count)."""
-        return not self.with_context(active_test=False).search_count([('poster_id', '=', user.id), ('post_kind', '=', 'employer'), ('post_state', '!=', 'rejected')])
+        """The first job(s) of an account are free: the Job limit of the Free package (Job board > Packages; archived = no free job). A rejected job
+        does not count."""
+        free = self.env['llmd.hr.package'].free_package()
+        posted = self.with_context(active_test=False).search_count([('poster_id', '=', user.id), ('post_kind', '=', 'employer'), ('post_state', '!=', 'rejected')])
+        return bool(free) and posted < free.limit
 
     @api.model
     def employer_post(self, user, form):

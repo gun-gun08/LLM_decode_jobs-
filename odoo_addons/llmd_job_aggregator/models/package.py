@@ -26,8 +26,8 @@ class LlmdHrPackage(models.Model):
     @api.constrains('amount', 'limit', 'post_limited')
     def _check_values(self):
         for rec in self:
-            if rec.amount <= 0:
-                raise ValidationError('The amount of a package must be more than 0.')
+            if rec.amount < 0:
+                raise ValidationError('The amount of a package cannot be below 0 (0 = the free package).')
             if rec.limit < 1:
                 raise ValidationError('The job limit of a package must be at least 1.')
             if rec.post_limited < 1:
@@ -38,7 +38,13 @@ class LlmdHrPackage(models.Model):
         """The active package of /jobs/plan/<code>: "bundle" / "pack" (the first two packages) or the package ID."""
         code = (code or '').strip()
         rec = self.env.ref(CODES[code], raise_if_not_found=False) if code in CODES else (self.browse(int(code)).exists() if code.isdigit() else self)
-        return rec.sudo() if rec and rec._name == self._name and rec.active else self.browse()
+        return rec.sudo() if rec and rec._name == self._name and rec.active and rec.amount > 0 else self.browse()      # the free package is not bought
+
+    @api.model
+    def free_package(self):
+        """The Free package (amount 0): how many jobs a new account posts for free and how many it may have open; empty when archived."""
+        rec = self.env.ref('llmd_job_aggregator.package_free', raise_if_not_found=False)
+        return rec.sudo() if rec and rec.sudo().active else self.browse()
 
     def code(self):
         """The address part of /jobs/plan/<code>: the old name of the first two packages, else the ID."""
