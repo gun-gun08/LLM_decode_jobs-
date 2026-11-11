@@ -135,7 +135,6 @@
                 </header>
                 <field name="name"/>
                 <field name="job_count"/>
-                <field name="industry"/>
                 <field name="website" widget="url"/>
                 <field name="linkedin" widget="url"/>
                 <field name="description" optional="hide"/>
