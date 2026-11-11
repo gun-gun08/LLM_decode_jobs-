@@ -172,10 +172,29 @@
         </field>
     </record>
 
+    <!-- the companies hiring now (open jobs) by default: a company with 0 open jobs is not on the website either; remove the filter to see them all -->
+    <record id="llmd_company_search" model="ir.ui.view">
+        <field name="name">llmd.company.search</field>
+        <field name="model">llmd.company</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="industry"/>
+                <filter name="hiring" string="Hiring now (open jobs)" domain="[('listing_ids', 'any', [('active', '=', True)])]"/>
+                <filter name="not_hiring" string="No open jobs" domain="[('listing_ids', 'not any', [('active', '=', True)])]"/>
+                <separator/>
+                <filter name="no_website" string="No website" domain="[('website', 'in', [False, ''])]"/>
+                <filter name="no_linkedin" string="No LinkedIn" domain="[('linkedin', 'in', [False, ''])]"/>
+            </search>
+        </field>
+    </record>
+
     <record id="llmd_company_action" model="ir.actions.act_window">
         <field name="name">Companies</field>
         <field name="res_model">llmd.company</field>
         <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="llmd_company_search"/>
+        <field name="context">{'search_default_hiring': 1}</field>
         <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No companies yet</p><p>The companies come from the jobs. Add a description, industry, website and LinkedIn: their page on the website shows them.</p></field>
     </record>
 
