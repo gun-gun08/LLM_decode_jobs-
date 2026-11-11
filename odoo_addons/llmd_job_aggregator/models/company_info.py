@@ -69,9 +69,9 @@ COMPANY_INFO = {
     'Zeta': ('https://www.zeta.tech', 'Zeta is an Indian banking technology company that builds a cloud-native platform for issuing cards and accounts.'),
     'Coursera': ('https://www.coursera.org', 'Coursera is an online learning platform with courses and degrees from universities and companies.'),
     'HackerRank': ('https://www.hackerrank.com', 'HackerRank is a technical hiring platform for assessing developer skills.'),
-    'NetEase Games': ('', 'NetEase Games is the games division of the Chinese internet company NetEase.'),
+    'NetEase Games': ('https://www.neteasegames.com', 'NetEase Games is the games division of the Chinese internet company NetEase.'),
     'Nium': ('https://www.nium.com', 'Nium is a global payments infrastructure company.'),
-    'Baidu USA': ('', 'Baidu USA is the US arm of Baidu, the Chinese internet search and AI company.'),
+    'Baidu USA': ('https://usa.baidu.com', 'Baidu USA is the US arm of Baidu, the Chinese internet search and AI company.'),
     'Druva': ('https://www.druva.com', 'Druva is a SaaS data protection and backup company.'),
     'Razorpay Software Private Limited': ('https://razorpay.com', 'Razorpay is an Indian payments and banking platform for businesses.'),
     'Netomi': ('https://www.netomi.com', 'Netomi is an AI customer service platform.'),
@@ -98,10 +98,25 @@ COMPANY_INFO = {
     'Smallest.ai': ('https://smallest.ai', 'Smallest.ai builds voice AI models and agents.'),
     'ByteDance': ('https://www.bytedance.com', 'ByteDance is a technology company behind TikTok and other content platforms.'),
     'Unacademy': ('https://unacademy.com', 'Unacademy is an Indian online learning platform.'),
+    'Everpure': ('https://www.everpuredata.com', ''),      # its own Greenhouse board links to everpuredata.com
 }
 
 # the LinkedIn company page the company's own website links to (read from it), or given by the team
 COMPANY_LINKEDIN = {
+    'AbbVie': 'https://www.linkedin.com/company/abbvie/',
+    'Agoda': 'https://www.linkedin.com/company/agoda/',
+    'Baidu USA': 'https://www.linkedin.com/company/baidu-usa/',
+    'Coinbase': 'https://www.linkedin.com/company/coinbase/',
+    'Everpure': 'https://www.linkedin.com/company/everpure-data/',
+    'Experian': 'https://www.linkedin.com/company/experian/',
+    'Freshworks': 'https://www.linkedin.com/company/freshworks-inc/',
+    'InMobi': 'https://www.linkedin.com/company/inmobi/',
+    'OpenAI': 'https://www.linkedin.com/company/openai/',
+    'Rubrik': 'https://www.linkedin.com/company/rubrik-inc/',
+    'Spotify': 'https://www.linkedin.com/company/spotify/',
+    'Toast': 'https://www.linkedin.com/company/toast-inc/',
+    'Turing': 'https://www.linkedin.com/company/turingcom/',
+    'Zeta': 'https://www.linkedin.com/company/zetasuite/',
     'Adyen': 'https://www.linkedin.com/company/adyen/',
     'Airwallex': 'https://www.linkedin.com/company/airwallex/',
     'Anthropic': 'https://www.linkedin.com/company/anthropicresearch/',
