@@ -16,7 +16,8 @@
                 <field name="application_type" optional="show"/>
                 <field name="posted_type" optional="show"/>
                 <field name="status" widget="badge" decoration-success="status == 'clicked'" decoration-muted="status == 'no_link'"/>
-                <field name="repeat" optional="show"/>
+                <field name="click_no" optional="show"/>
+                <field name="repeat" optional="hide"/>
                 <field name="location" optional="hide"/>
             </list>
         </field>
@@ -36,7 +37,7 @@
                         <group string="Click">
                             <field name="clicked_at"/>
                             <field name="application_type"/>
-                            <field name="repeat"/>
+                            <field name="click_no"/>
                         </group>
                         <group string="Job">
                             <field name="job_title"/>
@@ -126,4 +127,6 @@
 
     <menuitem id="llmd_job_click_menu" name="Apply Clicks" parent="hr_recruitment.menu_hr_recruitment_root" action="llmd_job_click_action"
               groups="hr_recruitment.group_hr_recruitment_user" sequence="4"/>
+    <!-- the click lines saved before "Clicks" existed: their number (models/click.py) -->
+    <function model="llmd.job.click" name="_llmd_number_clicks"/>
 </odoo>

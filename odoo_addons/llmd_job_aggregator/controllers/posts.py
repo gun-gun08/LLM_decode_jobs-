@@ -49,7 +49,7 @@ class LlmdJobPosts(http.Controller):
         if vals is None:                                                # what the account already knows is filled in
             vals = {'company': partner.company_name or '', 'designation': partner.function or '', 'company_site': partner.website or '', 'phone': partner.phone or '',
                     'linkedin': partner.llmd_linkedin or ''}
-        return {'vals': vals, 'errors': errors or {}, 'user_name': user.name, 'user_email': user.email or user.login, 'max_mb': A.MAX_RESUME // (1024 * 1024), 'open_n': request.env['llmd.job.listing'].sudo().open_posts_of(user), 'max_open': PO.MAX_OPEN_POSTS,
+        return {'vals': vals, 'errors': errors or {}, 'user_name': user.name, 'user_email': user.email or user.login, 'max_mb': A.MAX_RESUME // (1024 * 1024), 'open_n': request.env['llmd.job.listing'].sudo().open_posts_of(user), 'max_open': request.env['llmd.job.listing'].sudo().max_open_of(user),
                 'modes': F.WORK_MODES, 'types': list(PO.POST_JOB_TYPES.items()), 'levels': list(PO.POST_LEVELS.items()), 'departments': PO.POST_DEPARTMENTS, 'post_days': PO.POST_DAYS,
                 'free_post': request.env['llmd.job.listing'].sudo().free_post_left(user), 'credits': partner.llmd_job_credits,
                 'edit_post': edit_post, 'form_action': '/jobs/my/%d/edit' % edit_post.id if edit_post else '/jobs/post'}
@@ -215,7 +215,7 @@ class LlmdJobPosts(http.Controller):
                         currency.active = True
                     rec = request.env['llmd.plan.request'].sudo().create(dict(
                         vals, plan=plan_code if plan_code in PR.PLANS else False, package_id=package.id, user_id=user.id, amount=package.amount,
-                        currency_id=currency.id, jobs=package.limit if package.post_limited else 0, unlimited=not package.post_limited))
+                        currency_id=currency.id, jobs=package.limit, post_limit=package.post_limited))
                     partner = user.partner_id.sudo()
                     partner.write({k: v for k, v in (('phone', vals['phone']), ('website', vals['company_site']), ('company_name', vals['company']),
                                                      ('llmd_linkedin', vals['linkedin'])) if v and not partner[k]})
@@ -239,7 +239,7 @@ class LlmdJobPosts(http.Controller):
         counts = {p.id: len(p.employer_applications()) for p in posts}
         just = posts.filtered(lambda p: str(p.id) == (posted or ''))
         changed = posts.filtered(lambda p: str(p.id) == (edited or ''))
-        return request.render('llmd_job_aggregator.my_jobs', {'posts': posts, 'counts': counts, 'just_posted': just[:1], 'just_edited': changed[:1], 'max_open': PO.MAX_OPEN_POSTS,
+        return request.render('llmd_job_aggregator.my_jobs', {'posts': posts, 'counts': counts, 'just_posted': just[:1], 'just_edited': changed[:1], 'max_open': request.env['llmd.job.listing'].sudo().max_open_of(user),
                                                               'states': dict(PO.POST_STATES)})
 
     @http.route('/jobs/my/<int:post_id>/applicants', type='http', auth='public', website=True, sitemap=False)

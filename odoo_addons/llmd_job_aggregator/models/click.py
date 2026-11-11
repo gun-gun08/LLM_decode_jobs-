@@ -50,6 +50,8 @@ class LlmdJobClick(models.Model):
     job_key = fields.Char(required=True, index=True, readonly=True)
     visitor_key = fields.Char(index=True, readonly=True, help='A random id in a first-party cookie. It is not a name, an e-mail or an IP address; it only shows that two clicks came from the same browser.')
     repeat = fields.Boolean(string='Repeat click', readonly=True, help='The same browser or the same account had already clicked Apply Now on this job.')
+    click_no = fields.Integer(string='Clicks', readonly=True, default=1,
+                              help='Which click of the same browser / account on this job this is: 1 = the first, 2 = the second time, ...')
     user_id = fields.Many2one('res.users', string='User', ondelete='set null', index=True, readonly=True, help='Only to tell repeat clicks of one account apart. Name and e-mail are in Job Applications.')
     applicant_name = fields.Char(string='Name (19.0.33)', readonly=True, help='Only filled by version 19.0.33; name and e-mail are kept in Job Applications now.')
     email = fields.Char(string='Email (19.0.33)', readonly=True, help='Only filled by version 19.0.33; name and e-mail are kept in Job Applications now.')
@@ -74,6 +76,20 @@ class LlmdJobClick(models.Model):
             rec.display_name = '%s - %s' % (rec.job_title or '', rec.company or '') if rec.company else (rec.job_title or '')
 
     @api.model
+    def _llmd_number_clicks(self):
+        """Every module update: the repeat click lines saved before "Clicks" existed get their number (same browser or account, same job, oldest first)."""
+        for rec in self.sudo().search([('click_no', 'in', (0, 1)), ('repeat', '=', True)]):
+            who = []
+            if rec.visitor_key and rec.user_id:
+                who = ['|', ('visitor_key', '=', rec.visitor_key), ('user_id', '=', rec.user_id.id)]
+            elif rec.visitor_key:
+                who = [('visitor_key', '=', rec.visitor_key)]
+            elif rec.user_id:
+                who = [('user_id', '=', rec.user_id.id)]
+            older = ['|', ('clicked_at', '<', rec.clicked_at), '&', ('clicked_at', '=', rec.clicked_at), ('id', '<', rec.id)]
+            rec.click_no = (self.sudo().search_count([('job_key', '=', rec.job_key)] + older + who) if who else 0) + 1
+
+    @api.model
     def record_click(self, listing=None, job=None, visitor=None, url=None, user=None):
         """Save one click on "Apply Now" of an externally fetched `listing` or of one of our own positions (`job`); `url` = where the visitor is really sent when that
         is not the saved apply URL (our own form); `user` = the signed-in account: only its user ID is kept on the line (repeat clicks; the person is in Job Applications).
@@ -83,16 +99,19 @@ class LlmdJobClick(models.Model):
         if url:
             info['apply_url'] = url
         now = fields.Datetime.now()
-        repeat = False
+        repeat, before = False, self.browse()
         if visitor:
             if self.search_count([('visitor_key', '=', visitor), ('clicked_at', '>', now - timedelta(hours=1))]) >= HOURLY_LIMIT:
                 _logger.warning('apply clicks: one browser reached %d clicks in an hour, this one is not saved', HOURLY_LIMIT)
                 return self.browse()
-            repeat = bool(self.search([('visitor_key', '=', visitor), ('job_key', '=', info['job_key'])], limit=1))
+            before = self.search([('visitor_key', '=', visitor), ('job_key', '=', info['job_key'])])
+            repeat = bool(before)
         person = {}
         if user and not user._is_public():
             person = {'user_id': user.id}
-            repeat = repeat or bool(self.search([('user_id', '=', user.id), ('job_key', '=', info['job_key'])], limit=1))      # the same person, also from another browser
-        rec = self.create(dict(info, clicked_at=now, status='clicked' if info['apply_url'] else 'no_link', visitor_key=visitor or False, repeat=repeat, **person))
+            before |= self.search([('user_id', '=', user.id), ('job_key', '=', info['job_key'])])      # the same person, also from another browser
+            repeat = bool(before)
+        rec = self.create(dict(info, clicked_at=now, status='clicked' if info['apply_url'] else 'no_link', visitor_key=visitor or False, repeat=repeat,
+                                click_no=len(before) + 1, **person))
         _logger.info('apply click saved: %s (%s)', rec.job_key, rec.status)
         return rec

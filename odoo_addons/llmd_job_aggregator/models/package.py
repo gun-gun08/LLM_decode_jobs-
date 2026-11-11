@@ -3,6 +3,8 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+from . import post as PO
+
 # the old addresses of the two packages (links already shared): /jobs/plan/bundle and /jobs/plan/pack
 CODES = {'bundle': 'llmd_job_aggregator.package_bundle', 'pack': 'llmd_job_aggregator.package_pack'}
 
@@ -15,9 +17,8 @@ class LlmdHrPackage(models.Model):
     name = fields.Char(required=True, help='Shown on the page for companies, e.g. "Bundle of 3".')
     sequence = fields.Integer(default=10)
     limit = fields.Integer(string='Job limit', default=1, help='How many jobs the package lets the employer post (job credits added after the payment).')
-    post_limited = fields.Boolean(string='Post limited', default=True,
-                                  help='On: the employer gets "Job limit" job credits. Off: unlimited job posts for the account (still at most the open jobs '
-                                       'allowed at once).')
+    post_limited = fields.Integer(string='Post limit', default=PO.MAX_OPEN_POSTS,
+                                  help='How many jobs the employer may have open (pending + live) at the same time after buying this package.')
     active = fields.Boolean(default=True, help='Archived packages are not offered on the website.')
     amount = fields.Monetary(required=True, currency_field='currency_id', help='The price the employer pays online (Razorpay).')
     currency_id = fields.Many2one('res.currency', string='Currency', required=True, default=lambda self: self.env.ref('base.INR', raise_if_not_found=False))
@@ -27,8 +28,10 @@ class LlmdHrPackage(models.Model):
         for rec in self:
             if rec.amount <= 0:
                 raise ValidationError('The amount of a package must be more than 0.')
-            if rec.post_limited and rec.limit < 1:
-                raise ValidationError('A package with limited posts needs a job limit of at least 1.')
+            if rec.limit < 1:
+                raise ValidationError('The job limit of a package must be at least 1.')
+            if rec.post_limited < 1:
+                raise ValidationError('The post limit of a package must be at least 1 (jobs open at the same time).')
 
     @api.model
     def by_code(self, code):
@@ -44,8 +47,8 @@ class LlmdHrPackage(models.Model):
         return next((code for code, ref in CODES.items() if ref == xmlid), str(self.id))
 
     def plan_values(self):
-        """What the plan pages show: name, price, jobs ("unlimited" when the posts are not limited)."""
+        """What the plan pages show: name, price, jobs, how many can be open at once."""
         self.ensure_one()
         price = int(self.amount) if self.amount == int(self.amount) else self.amount
-        return {'name': self.name, 'price': price, 'jobs': self.limit if self.post_limited else 'unlimited', 'unlimited': not self.post_limited,
+        return {'name': self.name, 'price': price, 'jobs': self.limit, 'post_limit': self.post_limited,
                 'code': self.code(), 'currency': self.currency_id.symbol or ''}

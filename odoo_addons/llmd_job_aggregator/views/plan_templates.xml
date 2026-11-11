@@ -148,7 +148,7 @@
                         <group string="Plan">
                             <field name="package_id"/>
                             <field name="plan" invisible="not plan"/>
-                            <field name="unlimited" invisible="not unlimited"/>
+                            <field name="post_limit"/>
                             <field name="amount"/>
                             <field name="currency_id"/>
                             <field name="jobs"/>

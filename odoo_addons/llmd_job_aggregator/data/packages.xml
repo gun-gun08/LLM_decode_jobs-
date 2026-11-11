@@ -6,7 +6,7 @@
             <field name="name">Bundle of 3</field>
             <field name="sequence">10</field>
             <field name="limit">3</field>
-            <field name="post_limited" eval="True"/>
+            <field name="post_limited">5</field>
             <field name="amount">1000</field>
             <field name="currency_id" ref="base.INR"/>
         </record>
@@ -14,7 +14,7 @@
             <field name="name">Hiring pack</field>
             <field name="sequence">20</field>
             <field name="limit">5</field>
-            <field name="post_limited" eval="True"/>
+            <field name="post_limited">5</field>
             <field name="amount">5000</field>
             <field name="currency_id" ref="base.INR"/>
         </record>

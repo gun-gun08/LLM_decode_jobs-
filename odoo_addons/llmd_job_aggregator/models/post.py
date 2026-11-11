@@ -220,6 +220,11 @@ class LlmdJobPost(models.Model):
         return self.with_context(active_test=False).search_count([('poster_id', '=', user.id), ('post_kind', '=', 'employer'), ('post_state', 'in', ('pending', 'live'))])
 
     @api.model
+    def max_open_of(self, user):
+        """How many jobs this employer may have open (pending + live) at once: the post limit of the packages bought, else the default."""
+        return max(MAX_OPEN_POSTS, user.partner_id.sudo().llmd_max_open or 0)
+
+    @api.model
     def free_post_left(self, user):
         """The first job of an account is free (a rejected one does not count)."""
         return not self.with_context(active_test=False).search_count([('poster_id', '=', user.id), ('post_kind', '=', 'employer'), ('post_state', '!=', 'rejected')])
@@ -228,12 +233,10 @@ class LlmdJobPost(models.Model):
     def employer_post(self, user, form):
         """An employer's job from the /jobs/post form (already checked by validate_post) -> the new post, Pending review. The first job is free; a later one
         uses one job credit of the account (bought on the For companies page)."""
-        if self.open_posts_of(user) >= MAX_OPEN_POSTS:
-            raise UserError('You already have %d open jobs. Close one under My jobs before you post another.' % MAX_OPEN_POSTS)
+        if self.open_posts_of(user) >= self.max_open_of(user):
+            raise UserError('You already have %d open jobs. Close one under My jobs before you post another.' % self.max_open_of(user))
         free = self.free_post_left(user)
         partner = user.partner_id.sudo()
-        if partner.llmd_unlimited_posts:                                # a package without a job limit
-            free = True
         if not free and (partner.llmd_job_credits or 0) < 1:
             raise UserError('Your free job is used. Buy a plan on the For companies page to post more jobs.')
         vals = dict(self._post_form_vals(form), post_kind='employer', poster_id=user.id, contact_email=user.email or user.login)
@@ -251,10 +254,10 @@ class LlmdJobPost(models.Model):
             raise UserError('This job cannot be edited. A closed job can be reopened from My jobs.')
         vals = self._post_form_vals(form, update=True)
         if post.post_state == 'rejected':
-            if self.open_posts_of(user) >= MAX_OPEN_POSTS:
-                raise UserError('You already have %d open jobs. Close one under My jobs before you send this one again.' % MAX_OPEN_POSTS)
+            if self.open_posts_of(user) >= self.max_open_of(user):
+                raise UserError('You already have %d open jobs. Close one under My jobs before you send this one again.' % self.max_open_of(user))
             partner = user.partner_id.sudo()
-            if not self.free_post_left(user) and not partner.llmd_unlimited_posts:
+            if not self.free_post_left(user):
                 if (partner.llmd_job_credits or 0) < 1:
                     raise UserError('Sending this job again uses a job credit. Buy a plan on the For companies page.')
                 partner.llmd_job_credits -= 1
