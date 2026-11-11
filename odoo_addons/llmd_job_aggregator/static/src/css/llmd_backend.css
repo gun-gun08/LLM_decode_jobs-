@@ -1,20 +1,3 @@
-/* Job board > Packages - the list: compact columns, centred numbers and toggle */
-.o_llmd_pkg_list .o_list_table th[data-name="id"], .o_llmd_pkg_list .o_list_table td[name="id"],
-.o_llmd_pkg_list .o_list_table th[data-name="limit"], .o_llmd_pkg_list .o_list_table td[name="limit"],
-.o_llmd_pkg_list .o_list_table th[data-name="post_limited"], .o_llmd_pkg_list .o_list_table td[name="post_limited"],
-.o_llmd_pkg_list .o_list_table th[data-name="active"], .o_llmd_pkg_list .o_list_table td[name="active"] {
-    text-align: center !important;
-}
-.o_llmd_pkg_list .o_list_table th[data-name="id"] .d-flex, .o_llmd_pkg_list .o_list_table th[data-name="limit"] .d-flex,
-.o_llmd_pkg_list .o_list_table th[data-name="post_limited"] .d-flex, .o_llmd_pkg_list .o_list_table th[data-name="active"] .d-flex,
-.o_llmd_pkg_list .o_list_table td[name="active"] .o_field_widget {
-    justify-content: center;
-}
-.o_llmd_pkg_list .o_list_table td[name="limit"], .o_llmd_pkg_list .o_list_table td[name="post_limited"] {
-    font-weight: 600;
-    color: #4f46e5;
-}
-
 /* Job board > Packages - the price cards */
 .o_llmd_pkg_kanban .o_kanban_record.o_llmd_pkg_card {
     border: 1px solid #e5e7f0;

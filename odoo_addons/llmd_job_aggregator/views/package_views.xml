@@ -5,16 +5,16 @@
         <field name="name">llmd.hr.package.list</field>
         <field name="model">llmd.hr.package</field>
         <field name="arch" type="xml">
-            <list class="o_llmd_pkg_list" decoration-muted="not active">
+            <list decoration-muted="not active">
                 <field name="sequence" widget="handle"/>
-                <field name="id" string="ID" width="60px"/>
-                <field name="name" class="fw-bold"/>
-                <field name="limit" string="Jobs" width="110px"/>
-                <field name="post_limited" string="Open at once" width="130px"/>
-                <field name="product_id" optional="show" width="220px"/>
+                <field name="id" string="ID"/>
+                <field name="name"/>
+                <field name="limit" string="Jobs"/>
+                <field name="post_limited" string="Open at once"/>
+                <field name="product_id" optional="show"/>
                 <field name="currency_id" column_invisible="True"/>
-                <field name="amount" width="150px" class="fw-bold"/>
-                <field name="active" widget="boolean_toggle" width="90px"/>
+                <field name="amount"/>
+                <field name="active" widget="boolean_toggle"/>
             </list>
         </field>
     </record>
