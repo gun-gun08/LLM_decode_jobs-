@@ -200,6 +200,8 @@
 
     <!-- the known companies get their website, one line and LinkedIn (models/company_info.py) where the backend has nothing yet -->
     <function model="llmd.company" name="_llmd_fill_known"/>
+    <!-- the jobs whose title or place a source wrote in Chinese / Japanese / Korean: the English title on the board (models/title_en.py) -->
+    <function model="llmd.job.listing" name="_llmd_english_titles"/>
 
     <menuitem id="llmd_company_menu" name="Companies" parent="llmd_job_board_menu" action="llmd_company_action" sequence="15"
               groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>

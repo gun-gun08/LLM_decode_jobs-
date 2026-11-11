@@ -20,6 +20,7 @@ from . import job_facets as F
 from . import language as LANG
 from . import skill_map as SK
 from . import parsers as P
+from . import title_en as TE
 from . import summary as SUM
 from . import view_helpers as V
 
@@ -112,6 +113,8 @@ class LlmdJobListing(models.Model):
     source = fields.Char(required=True, index=True, help='Internal only: the job sources are never named on the website.')
     ext_id = fields.Char(string='Source job id', required=True, index=True)
     title = fields.Char(required=True)
+    title_source = fields.Char(string='Title as the source wrote it', readonly=True, copy=False,
+                               help='The title in Chinese / Japanese / Korean as the source sent it; the board shows the English title (models/title_en.py).')
     company = fields.Char()
     location = fields.Char()
     countries = fields.Char(string='Open to (countries)')
@@ -204,8 +207,34 @@ class LlmdJobListing(models.Model):
 
     _source_ext_uniq = models.Constraint('unique(source, ext_id)', 'This source job is already stored.')
 
+    @api.model
+    def _llmd_english_vals(self, vals):
+        """A title (or place) in Chinese / Japanese / Korean -> its English version for the board; the source's own title is kept in title_source."""
+        title = vals.get('title')
+        if title and TE.has_cjk(title):
+            english = TE.english_title(title)
+            if english != title:
+                vals['title'], vals['title_source'] = english, title
+        elif 'title' in vals and 'title_source' not in vals:      # a title in English (from the source or typed by hand)
+            vals['title_source'] = False
+        if vals.get('location') and TE.has_cjk(vals['location']):
+            vals['location'] = TE.english_place(vals['location'])
+        return vals
+
+    @api.model
+    def _llmd_english_titles(self):
+        """Every module update: the jobs stored with a Chinese / Japanese / Korean title or place get the English one (the sync does it for new jobs)."""
+        self.env.cr.execute("SELECT id FROM llmd_job_listing WHERE title ~ %s OR location ~ %s", [TE.CJK.pattern, TE.CJK.pattern])
+        for rec in self.with_context(active_test=False, llmd_sync=True).browse([r[0] for r in self.env.cr.fetchall()]):
+            vals = self._llmd_english_vals({'title': rec.title, 'location': rec.location})
+            vals = {k: v for k, v in vals.items() if v != rec[k]}
+            if vals:
+                rec.write(vals)
+
     def write(self, vals):
         """A change made by hand (not by the sync, context llmd_sync) is remembered in manual_fields, so that the next sync does not overwrite it."""
+        if 'title' in vals or 'location' in vals:
+            vals = self._llmd_english_vals(dict(vals))
         edited = [f for f in EDITABLE_FIELDS if f in vals] if not self.env.context.get('llmd_sync') else []
         res = super().write(vals)
         if edited:
@@ -271,6 +300,7 @@ class LlmdJobListing(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        vals_list = [self._llmd_english_vals(dict(vals)) for vals in vals_list]
         records = super().create(vals_list)
         records.assign_slugs()
         return records
