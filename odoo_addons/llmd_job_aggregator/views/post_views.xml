@@ -129,7 +129,7 @@
         <field name="name">llmd.company.list</field>
         <field name="model">llmd.company</field>
         <field name="arch" type="xml">
-            <list create="0" delete="0" editable="bottom">
+            <list create="0" delete="0">
                 <header>
                     <button name="action_find_linkedin" type="object" string="Find LinkedIn" help="Reads each selected company's website and takes the LinkedIn page it links to."/>
                 </header>

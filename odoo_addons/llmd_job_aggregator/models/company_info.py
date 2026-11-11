@@ -103,6 +103,10 @@ COMPANY_INFO = {
 
 # the LinkedIn company page the company's own website links to (read from it), or given by the team
 COMPANY_LINKEDIN = {
+    'Airbnb': 'https://www.linkedin.com/company/airbnb/',
+    'BYD North America': 'https://www.linkedin.com/company/byd-north-america/',
+    'Binance': 'https://www.linkedin.com/company/binance/',
+    'Meesho': 'https://www.linkedin.com/company/meesho/',
     'AbbVie': 'https://www.linkedin.com/company/abbvie/',
     'Agoda': 'https://www.linkedin.com/company/agoda/',
     'Baidu USA': 'https://www.linkedin.com/company/baidu-usa/',
