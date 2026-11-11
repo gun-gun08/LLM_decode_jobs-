@@ -11,8 +11,8 @@
                 <field name="name"/>
                 <field name="limit"/>
                 <field name="post_limited"/>
-                <field name="amount"/>
-                <field name="currency_id"/>
+                <field name="currency_id" width="110px"/>
+                <field name="amount" width="140px"/>
                 <field name="active" widget="boolean_toggle"/>
             </list>
         </field>
