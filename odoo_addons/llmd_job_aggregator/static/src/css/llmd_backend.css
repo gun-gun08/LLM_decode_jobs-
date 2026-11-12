@@ -1,3 +1,9 @@
+/* Job board > Packages - the list: a little room between Post limit and Product (header and cells alike, so they stay lined up) */
+.o_llmd_pkg_list .o_list_table th[data-name="product_id"],
+.o_llmd_pkg_list .o_list_table td[name="product_id"] {
+    padding-left: 2.5rem !important;
+}
+
 /* Job board > Packages - the price cards */
 .o_llmd_pkg_kanban .o_kanban_record.o_llmd_pkg_card {
     border: 1px solid #e5e7f0;

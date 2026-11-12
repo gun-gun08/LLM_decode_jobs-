@@ -5,7 +5,7 @@
         <field name="name">llmd.hr.package.list</field>
         <field name="model">llmd.hr.package</field>
         <field name="arch" type="xml">
-            <list decoration-muted="not active">
+            <list class="o_llmd_pkg_list" decoration-muted="not active">
                 <field name="sequence" widget="handle"/>
                 <field name="id" string="ID"/>
                 <field name="name"/>
