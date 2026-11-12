@@ -23,10 +23,10 @@ brand = View.search([('key', '=', 'website.option_header_brand_name'), ('website
 if brand:                                                                                                 # the demo text "My Website" -> LLM Decode
     brand.write({'arch_db': brand.arch_db.replace('>My Website</a>', '><span>LLM Decode</span></a>')})
 
-# the menu: Home, Courses, Jobs Explorer (the job board, /jobs), Resources, Contact us
+# the menu: Home, Courses, Jobs Explorer (the job board, /jobs) - Resources and Contact us are not in the header
 Menu = env['website.menu'].sudo()                                                                         # noqa: F821
 top = website.menu_id
-want = [('Home', '/', 10), ('Courses', LEARN + '/slides', 20), ('Jobs Explorer', '/jobs', 30), ('Resources', LEARN + '/library', 40), ('Contact us', '/contactus', 60)]
+want = [('Home', '/', 10), ('Courses', LEARN + '/slides', 20), ('Jobs Explorer', '/jobs', 30)]      # no Resources / Contact us in the header (as asked)
 for name, url, seq in want:
     menu = Menu.search([('parent_id', '=', top.id), ('url', '=', url)], limit=1)
     if not menu and url == '/jobs':
