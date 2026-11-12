@@ -1,6 +1,6 @@
 """A paid plan of the page for companies (/jobs/plan/<plan>): the signed-in employer fills in the company details, pays online (Odoo's payment page -
 Razorpay, set up under Website/Invoicing > Payment Providers) and gets job credits on the account. The first job of an account is free; every later
-post uses one credit (given back when we reject the job). Requests are kept under Job board > Plan requests."""
+post uses one credit (given back when we reject the job). Requests are kept under Job board > Subscribers."""
 import logging
 import re
 
@@ -53,13 +53,19 @@ def validate_request(form):
 
 class LlmdPlanRequest(models.Model):
     _name = 'llmd.plan.request'
-    _description = 'Job board plan request'
+    _description = 'Job board subscriber'
     _order = 'create_date desc, id desc'
 
     name = fields.Char(string='Contact', compute='_compute_name', store=True)
     plan = fields.Selection([(code, plan_label(code)) for code in PLANS], help='The plan of the first requests (before Job board > Packages).')
     package_id = fields.Many2one('llmd.hr.package', string='Package', ondelete='set null', index=True)
-    invoice_id = fields.Many2one('account.move', string='Invoice', readonly=True, copy=False, help='The customer invoice of this plan (made when it is paid).')
+    invoice_id = fields.Many2one('account.move', string='Invoice', readonly=True, copy=False,
+                                 help='The customer invoice of this plan: made in draft when the employer goes to the payment page, posted and paid by the '
+                                      'online payment (or posted by "Paid (add credits)").')
+    invoice_state = fields.Selection(related='invoice_id.state', string='Invoice status')
+    invoice_payment_state = fields.Selection(related='invoice_id.payment_state', string='Invoice paid')
+    payment_status = fields.Char(string='Online payment', compute='_compute_payment_status',
+                                 help='The last Razorpay payment of this plan (LLMDPLAN-<id>): not started, waiting, done, cancelled or an error.')
     post_limit = fields.Integer(string='Post limit', help='The jobs the account may have open at the same time once this package is paid (from the package).')
     state = fields.Selection([('new', 'Waiting for payment'), ('contacted', 'Contacted'), ('paid', 'Paid'), ('cancel', 'Cancelled')], default='new', required=True, index=True)
     amount = fields.Float(string='Amount', digits=(12, 2))
@@ -87,6 +93,30 @@ class LlmdPlanRequest(models.Model):
         for rec in self:
             rec.name = '%s %s (%s)' % (rec.first_name or '', rec.last_name or '', rec.company or '')
 
+    def _llmd_transactions(self):
+        self.ensure_one()
+        if not self.id:
+            return self.env['payment.transaction']
+        return self.env['payment.transaction'].sudo().search(['|', ('reference', '=', '%s%d' % (REF_PREFIX, self.id)),
+                                                              ('reference', '=like', '%s%d-%%' % (REF_PREFIX, self.id))], order='id desc')
+
+    def _compute_payment_status(self):
+        labels = {'draft': 'Started, not paid', 'pending': 'Waiting for Razorpay', 'authorized': 'Authorized', 'done': 'Done',
+                  'cancel': 'Cancelled', 'error': 'Error'}
+        for rec in self:
+            tx = rec._llmd_transactions()[:1]
+            rec.payment_status = ('%s (%s)' % (labels.get(tx.state, tx.state), tx.reference)) if tx else 'Not started'
+
+    def action_open_invoice(self):
+        self.ensure_one()
+        return {'type': 'ir.actions.act_window', 'res_model': 'account.move', 'res_id': self.invoice_id.id, 'view_mode': 'form',
+                'views': [(False, 'form')], 'context': {'default_move_type': 'out_invoice'}}
+
+    def action_open_payments(self):
+        self.ensure_one()
+        return {'type': 'ir.actions.act_window', 'name': 'Online payments', 'res_model': 'payment.transaction', 'view_mode': 'list,form',
+                'domain': [('id', 'in', self._llmd_transactions().ids)]}
+
     @api.depends('paid_count')
     def _compute_paid_twice(self):
         for rec in self:
@@ -100,11 +130,19 @@ class LlmdPlanRequest(models.Model):
         (posted; finance registers the payment on it)."""
         for rec in self:
             rec._llmd_credit()
-            if not rec.invoice_id:
-                invoice = rec._llmd_make_invoice()
-                if invoice:
-                    invoice.action_post()
+            invoice = rec._llmd_open_invoice()
+            if invoice.state == 'draft':
+                invoice.action_post()
         return True
+
+    def _llmd_open_invoice(self, tx=None):
+        """The invoice to pay: the draft made on the payment page, else a new one (none yet, or the old one was cancelled). A posted invoice is
+        already paid or waiting for finance: nothing new is made (a second payment of the same plan gets no second invoice)."""
+        self.ensure_one()
+        invoice = self.invoice_id.sudo()
+        if invoice and invoice.state != 'cancel':
+            return invoice
+        return self._llmd_make_invoice(tx)
 
     def _llmd_make_invoice(self, tx=None):
         """The customer invoice of this plan, in draft: the employer's account, one line with the package's product (its name, price and GST taxes -
@@ -128,6 +166,9 @@ class LlmdPlanRequest(models.Model):
                 if tx and abs(invoice.amount_total - tx.amount) > 0.01:
                     _logger.warning('plan request %s: invoice total %s differs from the payment %s', self.id, invoice.amount_total, tx.amount)
                 self.invoice_id = invoice
+                invoice.message_post(body=Markup('Job board plan <b>%s</b> (%s, %s jobs) - subscriber %s%d. %s') % (
+                    package.name or self.plan or '', self.company or '', self.jobs or 0, REF_PREFIX, self.id,
+                    'Paid online: %s' % tx.reference if tx else 'Waiting for the online payment (Razorpay); it is posted and paid by itself.'))
                 return invoice
         except Exception:
             _logger.warning('plan request %s: the invoice could not be made', self.id, exc_info=True)
@@ -163,6 +204,9 @@ class LlmdPlanRequest(models.Model):
 
     def action_cancel(self):
         self.write({'state': 'cancel'})
+        drafts = self.invoice_id.sudo().filtered(lambda m: m.state == 'draft')
+        if drafts:
+            drafts.button_cancel()
 
     def _notify_team(self):
         """One e-mail to our team (the company address of the website) about a new request; it never stops the request."""
@@ -170,12 +214,12 @@ class LlmdPlanRequest(models.Model):
         to = self.env.company.email
         if not to:
             return
-        body = Markup('<p>New plan request: <b>%s</b></p><p>%s %s, %s<br/>%s · %s<br/>%s</p><p>%s</p>') % (
-            dict(self._fields['plan'].selection)[self.plan], self.first_name, self.last_name, self.company, self.email, self.phone,
+        body = Markup('<p>New subscriber: <b>%s</b></p><p>%s %s, %s<br/>%s · %s<br/>%s</p><p>%s</p>') % (
+            self.package_id.name or dict(self._fields['plan'].selection).get(self.plan) or '', self.first_name, self.last_name, self.company, self.email, self.phone,
             self.company_site or '', self.note or '')
         try:
             with self.env.cr.savepoint():
-                self.env['mail.mail'].sudo().create({'subject': 'Plan request: %s' % self.company, 'email_to': to, 'body_html': str(body), 'auto_delete': True,
+                self.env['mail.mail'].sudo().create({'subject': 'New subscriber: %s' % self.company, 'email_to': to, 'body_html': str(body), 'auto_delete': True,
                                                      'reply_to': self.email, 'email_from': self.env.company.email_formatted or False})
         except Exception:
             _logger.warning('plan request %s: the e-mail to the team could not be queued', self.id, exc_info=True)
@@ -239,9 +283,12 @@ class PaymentTransaction(models.Model):
         for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX) and not t.invoice_ids):
             match = re.match(r'%s(\d+)' % REF_PREFIX, tx.reference)
             req = Request.browse(int(match.group(1))).exists() if match else Request
-            if req and not req.invoice_id and tx.currency_id == req.currency_id and tx.amount + 0.001 >= req.amount:
-                invoice = req._llmd_make_invoice(tx)
-                if invoice:
+            if req and tx.currency_id == req.currency_id and tx.amount + 0.001 >= req.amount:
+                invoice = req._llmd_open_invoice(tx)
+                if invoice.state == 'draft':
+                    if abs(invoice.amount_total - tx.amount) > 0.01:
+                        _logger.warning('plan request %s: invoice total %s differs from the payment %s', req.id, invoice.amount_total, tx.amount)
+                    invoice.invoice_origin = tx.reference
                     tx.sudo().invoice_ids = [(4, invoice.id)]
         super()._post_process()
         for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX)):

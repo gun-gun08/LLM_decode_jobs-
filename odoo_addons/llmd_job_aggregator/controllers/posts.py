@@ -244,6 +244,7 @@ class LlmdJobPosts(http.Controller):
                     partner.write({k: v for k, v in (('phone', vals['phone']), ('website', vals['company_site']), ('company_name', vals['company']),
                                                      ('llmd_linkedin', vals['linkedin'])) if v and not partner[k]})
                     rec._notify_team()
+                    rec._llmd_make_invoice()                             # draft now; the payment posts it and marks it paid
                     url = rec.payment_url()
                 return request.redirect(url)
             except Exception:

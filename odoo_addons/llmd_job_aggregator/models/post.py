@@ -251,7 +251,9 @@ class LlmdJobPost(models.Model):
         if not free:
             vals['post_paid'] = True
             partner.llmd_job_credits -= 1
-        return self.sudo().create(vals)
+        post = self.sudo().create(vals)
+        post._notify_team_review()
+        return post
 
     @api.model
     def employer_update(self, user, post, form):
@@ -272,7 +274,34 @@ class LlmdJobPost(models.Model):
                 vals['post_paid'] = True
         vals.update(post_state='pending', active=False, reject_reason=False)
         post.write(vals)
+        post._notify_team_review(edited=True)
         return post
+
+    def _notify_team_review(self, edited=False):
+        """One e-mail to our team (the company e-mail, e.g. hello@llmdecode.com) when an employer sends a job for review - new or edited - with
+        the link to approve it in the backend. Replying goes to the employer. It never stops the post."""
+        self.ensure_one()
+        to = self.env.company.email
+        if self.post_kind != 'employer' or not to:
+            return
+        user = self.poster_id
+        partner = user.partner_id
+        base = self.env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
+        link = '%s/odoo/action-llmd_job_aggregator.llmd_job_post_employer_action/%d' % (base, self.id)
+        body = Markup('<p>%s</p><p><b>%s</b> - %s<br/>%s</p><p>Posted by %s (%s%s)<br/>%s</p><p><a href="%s">Open it to approve or reject</a> '
+                      '(Job board &gt; Employer posts).</p>') % (
+            'An employer edited a job - it is back in Pending review:' if edited else 'A new job is waiting for review:',
+            self.title or '', self.company or '', self.location or '',
+            partner.name or user.login or '-', self.contact_email or user.email or '-', (', %s' % partner.phone) if partner.phone else '',
+            'Paid with a job credit' if self.post_paid else 'Free job', link)
+        try:
+            with self.env.cr.savepoint():
+                self.env['mail.mail'].sudo().create({
+                    'subject': '%s: %s (%s)' % ('Job edited, review again' if edited else 'New job for review', self.title or '', self.company or ''),
+                    'email_to': to, 'body_html': str(body), 'auto_delete': True, 'reply_to': self.contact_email or user.email or False,
+                    'email_from': self.env.company.email_formatted or False})
+        except Exception:
+            _logger.warning('job post %s: the e-mail to the team could not be queued', self.id, exc_info=True)
 
     @api.model
     def _post_form_vals(self, form, update=False):
