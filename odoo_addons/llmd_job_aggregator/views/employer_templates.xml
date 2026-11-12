@@ -145,7 +145,7 @@
                                     <span class="o_llmd_plan_ic"><i t-attf-class="fa #{'fa-briefcase' if pkg_first else 'fa-users'}" aria-hidden="true"/></span>
                                     <h3 t-out="pv['name']"/>
                                     <p class="o_llmd_plan_for" t-out="'For a few more roles' if pkg_first else 'For teams hiring for several roles'"/>
-                                    <p class="o_llmd_emp_price"><t t-out="pv['currency']"/><t t-out="'{:,}'.format(pv['price'])"/> <small t-out="'for %s jobs' % pv['jobs']"/></p>
+                                    <p class="o_llmd_emp_price"><t t-out="pv['currency']"/><t t-out="'{:,}'.format(pv['price'])"/> <small t-out="'%sfor %s jobs' % ('+ GST ' if pv['gst_extra'] else '', pv['jobs'])"/></p>
                                     <ul>
                                         <li><i class="fa fa-check" aria-hidden="true"/> Everything in <t t-out="'Free' if pkg_first else paid_pkgs[pkg_index - 1].name"/></li>
                                         <li><i class="fa fa-check" aria-hidden="true"/> Up to <t t-out="pv['post_limit']"/> jobs open at the same time</li>

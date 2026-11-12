@@ -198,7 +198,7 @@
                             </span>
                         </div>
                     </div>
-                    <p class="o_llmd_post_small">Up to <t t-out="max_open"/> jobs can be pending or live at a time.</p>
+                    <p class="o_llmd_post_small">Up to <t t-out="max_open"/> jobs can be pending or live at a time. <a href="/my/invoices"><i class="fa fa-file-text-o" aria-hidden="true"/> Your invoices</a></p>
                 </div>
             </div>
         </t>

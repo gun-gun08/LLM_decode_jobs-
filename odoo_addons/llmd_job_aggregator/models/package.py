@@ -54,9 +54,25 @@ class LlmdHrPackage(models.Model):
         xmlid = self.get_external_id().get(self.id, '')
         return next((code for code, ref in CODES.items() if ref == xmlid), str(self.id))
 
+    def price_info(self, partner=None):
+        """The package price with the taxes of its product (GST, as set on the product; mapped by the partner's fiscal position):
+        {'base', 'tax', 'total', 'extra'}. extra = the tax comes on top of the amount (the product's tax is not included in the price)."""
+        self.ensure_one()
+        base = total = self.amount
+        product = self.product_id.sudo()
+        taxes = product.taxes_id._filter_taxes_by_company(self.env.company) if product and self.amount else self.env['account.tax']
+        if taxes and partner:
+            taxes = self.env['account.fiscal.position'].sudo()._get_fiscal_position(partner).map_tax(taxes)
+        if taxes:
+            res = taxes.compute_all(self.amount, currency=self.currency_id, quantity=1, product=product, partner=partner)
+            base, total = res['total_excluded'], res['total_included']
+        return {'base': base, 'tax': total - base, 'total': total, 'extra': total - self.amount > 0.004}
+
     def plan_values(self):
         """What the plan pages show: name, price, jobs, how many can be open at once."""
         self.ensure_one()
         price = int(self.amount) if self.amount == int(self.amount) else self.amount
-        return {'name': self.name, 'price': price, 'jobs': self.limit, 'post_limit': self.post_limited,
+        info = self.price_info()
+        total = int(info['total']) if info['total'] == int(info['total']) else round(info['total'], 2)
+        return {'name': self.name, 'price': price, 'jobs': self.limit, 'post_limit': self.post_limited, 'total': total, 'gst_extra': info['extra'],
                 'code': self.code(), 'currency': self.currency_id.symbol or ''}

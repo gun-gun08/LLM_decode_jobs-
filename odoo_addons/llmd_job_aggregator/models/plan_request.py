@@ -59,6 +59,7 @@ class LlmdPlanRequest(models.Model):
     name = fields.Char(string='Contact', compute='_compute_name', store=True)
     plan = fields.Selection([(code, plan_label(code)) for code in PLANS], help='The plan of the first requests (before Job board > Packages).')
     package_id = fields.Many2one('llmd.hr.package', string='Package', ondelete='set null', index=True)
+    invoice_id = fields.Many2one('account.move', string='Invoice', readonly=True, copy=False, help='The customer invoice of this plan (made when it is paid).')
     post_limit = fields.Integer(string='Post limit', help='The jobs the account may have open at the same time once this package is paid (from the package).')
     state = fields.Selection([('new', 'Waiting for payment'), ('contacted', 'Contacted'), ('paid', 'Paid'), ('cancel', 'Cancelled')], default='new', required=True, index=True)
     amount = fields.Float(string='Amount', digits=(12, 2))
@@ -95,10 +96,42 @@ class LlmdPlanRequest(models.Model):
         self.write({'state': 'contacted'})
 
     def action_paid(self):
-        """Paid outside the website (bank transfer, a payment link...): the credits are added once, as for an online payment."""
+        """Paid outside the website (bank transfer, a payment link...): the credits are added once, as for an online payment, and the invoice is made
+        (posted; finance registers the payment on it)."""
         for rec in self:
             rec._llmd_credit()
+            if not rec.invoice_id:
+                invoice = rec._llmd_make_invoice()
+                if invoice:
+                    invoice.action_post()
         return True
+
+    def _llmd_make_invoice(self, tx=None):
+        """The customer invoice of this plan, in draft: the employer's account, one line with the package's product (its name, price and GST taxes -
+        Odoo maps them by the customer's fiscal position: CGST + SGST in Haryana, IGST elsewhere). An error is logged and never stops the payment."""
+        self.ensure_one()
+        partner = self.user_id.partner_id.sudo()
+        if not partner:
+            return self.env['account.move']
+        try:
+            with self.env.cr.savepoint():
+                package = self.package_id.sudo()
+                product = package.product_id
+                line = {'quantity': 1, 'price_unit': package.amount if package else self.amount}
+                if product:
+                    line['product_id'] = product.id
+                else:
+                    line['name'] = package.name or dict(self._fields['plan'].selection).get(self.plan) or 'Job board plan'
+                invoice = self.env['account.move'].sudo().with_company(self.env.company).create({
+                    'move_type': 'out_invoice', 'partner_id': partner.id, 'currency_id': self.currency_id.id,
+                    'invoice_origin': tx.reference if tx else '%s%d' % (REF_PREFIX, self.id), 'invoice_line_ids': [(0, 0, line)]})
+                if tx and abs(invoice.amount_total - tx.amount) > 0.01:
+                    _logger.warning('plan request %s: invoice total %s differs from the payment %s', self.id, invoice.amount_total, tx.amount)
+                self.invoice_id = invoice
+                return invoice
+        except Exception:
+            _logger.warning('plan request %s: the invoice could not be made', self.id, exc_info=True)
+        return self.env['account.move']
 
     def _llmd_credit(self, tx=None):
         """A payment of the plan is done: its job credits go to the account and the request is marked Paid. Every payment counts once (an online
@@ -200,9 +233,17 @@ class PaymentTransaction(models.Model):
                             ('reference', '=like', REF_PREFIX + '%'), ('llmd_razorpay_order_id', '!=', False), ('create_date', '>=', since)], limit=5)._llmd_razorpay_sync()
 
     def _post_process(self):
-        """A done payment of a plan request (reference LLMDPLAN-<id>) adds the plan's job credits - when the amount and currency are the ones asked."""
-        super()._post_process()
+        """A done payment of a plan request (reference LLMDPLAN-<id>) adds the plan's job credits - when the amount and currency are the ones asked.
+        Before Odoo's own post-processing, the plan's invoice is made and linked to the payment: Odoo then posts it and reconciles the payment with it."""
         Request = self.env['llmd.plan.request'].sudo()
+        for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX) and not t.invoice_ids):
+            match = re.match(r'%s(\d+)' % REF_PREFIX, tx.reference)
+            req = Request.browse(int(match.group(1))).exists() if match else Request
+            if req and not req.invoice_id and tx.currency_id == req.currency_id and tx.amount + 0.001 >= req.amount:
+                invoice = req._llmd_make_invoice(tx)
+                if invoice:
+                    tx.sudo().invoice_ids = [(4, invoice.id)]
+        super()._post_process()
         for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX)):
             match = re.match(r'%s(\d+)' % REF_PREFIX, tx.reference)
             req = Request.browse(int(match.group(1))).exists() if match else Request

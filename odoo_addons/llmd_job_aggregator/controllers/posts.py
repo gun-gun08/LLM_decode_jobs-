@@ -237,7 +237,8 @@ class LlmdJobPosts(http.Controller):
                     if not currency.active:                             # Razorpay takes Indian rupees: the packages are in INR
                         currency.active = True
                     rec = request.env['llmd.plan.request'].sudo().create(dict(
-                        vals, plan=plan_code if plan_code in PR.PLANS else False, package_id=package.id, user_id=user.id, amount=package.amount,
+                        vals, plan=plan_code if plan_code in PR.PLANS else False, package_id=package.id, user_id=user.id,
+                        amount=package.price_info(user.partner_id)['total'],
                         currency_id=currency.id, jobs=package.limit, post_limit=package.post_limited))
                     partner = user.partner_id.sudo()
                     partner.write({k: v for k, v in (('phone', vals['phone']), ('website', vals['company_site']), ('company_name', vals['company']),

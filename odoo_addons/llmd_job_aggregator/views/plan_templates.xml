@@ -15,7 +15,7 @@
                         <h1 class="o_llmd_h2">
                             Post <t t-out="plan['jobs']"/> jobs
                         </h1>
-                        <p class="o_llmd_planreq_price">₹<t t-out="'{:,}'.format(plan['price'])"/> <small t-out="'for %s jobs' % plan['jobs']"/></p>
+                        <p class="o_llmd_planreq_price">₹<t t-out="'{:,}'.format(plan['price'])"/> <small t-out="'%sfor %s jobs' % ('+ GST ' if plan.get('gst_extra') else '', plan['jobs'])"/></p>
                         <p class="o_llmd_planreq_lead">Once published, your jobs are:</p>
                         <ul class="o_llmd_planreq_gets">
                             <li><i class="fa fa-check" aria-hidden="true"/> Checked by our team and live for <t t-out="post_days"/> days</li>
@@ -61,7 +61,7 @@
                                     </div>
                                 </div>
                                 <button t-if="signed_in" type="submit" class="btn o_llmd_btn_primary o_llmd_planreq_btn">
-                                    <i class="fa fa-lock" aria-hidden="true"/> Pay ₹<t t-out="'{:,}'.format(plan['price'])"/> and get <t t-out="plan['jobs']"/> jobs
+                                    <i class="fa fa-lock" aria-hidden="true"/> Pay ₹<t t-out="'{:,}'.format(plan.get('total', plan['price']))"/><t t-if="plan.get('gst_extra')"> (incl. GST)</t> and get <t t-out="plan['jobs']"/> jobs
                                 </button>
                                 <a t-else="" t-attf-href="/web/login?redirect=/jobs/plan/#{plan_code}" class="btn o_llmd_btn_primary o_llmd_planreq_btn" data-llmd-auth="1">
                                     <i class="fa fa-sign-in" aria-hidden="true"/> Sign in to buy <t t-out="plan['jobs']"/> jobs
@@ -72,7 +72,7 @@
                             <div class="o_llmd_planreq_next">
                                 <h3>What happens after your payment?</h3>
                                 <ol>
-                                    <li><t t-out="plan['jobs']"/> job credits are added to your account as soon as the payment is done.</li>
+                                    <li><t t-out="plan['jobs']"/> job credits are added to your account as soon as the payment is done, with a GST invoice under My Account &gt; Invoices.</li>
                                     <li>Post your jobs from <a href="/jobs/post">Post a job</a> - each job uses one credit; we check and publish it.</li>
                                     <li>Applicants and resumes reach My jobs and your inbox. A job we do not publish gives its credit back.</li>
                                 </ol>
@@ -155,6 +155,7 @@
                             <field name="create_date" string="Received" readonly="1"/>
                             <field name="user_id" readonly="1"/>
                             <field name="transaction_id"/>
+                            <field name="invoice_id"/>
                             <field name="credited"/>
                             <field name="paid_twice" invisible="1"/>
                             <field name="credits_left"/>
