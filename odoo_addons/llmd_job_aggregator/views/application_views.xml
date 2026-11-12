@@ -200,5 +200,13 @@
         <field name="active" eval="False"/>
     </record>
 
+    <!-- "Recruitment > Applications > By Job Positions" is hidden too (on request); the job positions themselves stay under Configuration > Job Positions. -->
+    <record id="hr_recruitment.menu_hr_job_position" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+    <record id="hr_recruitment.menu_hr_job_position_interviewer" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
     <!-- The sync log (llmd.job.sync) has no screen any more - removed on request. Every run is still written to it (the website's "Updated ... ago" reads it). -->
 </odoo>

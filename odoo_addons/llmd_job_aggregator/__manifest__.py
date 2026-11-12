@@ -1,7 +1,7 @@
 {
     'name': 'LLM Decode - Jobs from the job APIs',
     'summary': 'Job board of real jobs for the course tracks (/jobs), a detail page per job whose Apply Now opens our application form (saved in Odoo Recruitment > Job Applications) next to a tracked link to the employer (Apply Clicks), applicants from authorized provider integrations, and API-filled pages for our own positions, and jobs posted on the site: by our team (Posted by LLM Decode) and by employers (/jobs/post, reviewed first)',
-    'version': '19.0.104.0.0',
+    'version': '19.0.105.0.0',
     'author': 'LLM Decode',
     'license': 'LGPL-3',
     'category': 'Human Resources/Recruitment',
