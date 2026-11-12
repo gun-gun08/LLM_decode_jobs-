@@ -1,7 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- the two packages of the page for companies; created once, then the team changes them under Job board > Packages (an update never resets them) -->
+    <!-- the packages of the page for companies (Free, Bundle of 3, Hiring pack) and their products; created once, then the team changes them under Job board > Packages (an update never resets them) -->
     <data noupdate="1">
+        <!-- the products of the paid packages: the names on the invoices (Service, sold only) -->
+        <record id="product_package_starter" model="product.product">
+            <field name="name">Starter Hiring Pack – 3 Jobs</field>
+            <field name="default_code">LLMD-JOB-3</field>
+            <field name="type">service</field>
+            <field name="list_price">1000</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+        </record>
+        <record id="product_package_team" model="product.product">
+            <field name="name">Team Hiring Pack – 5 Jobs</field>
+            <field name="default_code">LLMD-JOB-5</field>
+            <field name="type">service</field>
+            <field name="list_price">5000</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+        </record>
         <record id="package_free" model="llmd.hr.package">
             <field name="name">Free</field>
             <field name="sequence">1</field>
@@ -17,6 +34,7 @@
             <field name="post_limited">3</field>
             <field name="amount">1000</field>
             <field name="currency_id" ref="base.INR"/>
+            <field name="product_id" ref="product_package_starter"/>
         </record>
         <record id="package_pack" model="llmd.hr.package">
             <field name="name">Hiring pack</field>
@@ -25,6 +43,7 @@
             <field name="post_limited">5</field>
             <field name="amount">5000</field>
             <field name="currency_id" ref="base.INR"/>
+            <field name="product_id" ref="product_package_team"/>
         </record>
     </data>
 </odoo>
