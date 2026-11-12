@@ -1,7 +1,7 @@
 """Who a website account is on the job board: a job seeker (applicant) or somebody hiring (employer / HR) - asked at the sign-up (the window of Apply Now /
 Post a job, and Odoo's own /web/signup page), or once after a sign-in when it is not known yet. A hirer also gives the company, their designation and,
 optionally, the company website and a phone number; all of it is kept on the person's contact (res.partner), in Odoo's own fields where there is one
-(company_name, function, website, phone). Recruitment > Job board > Employers lists the hirers."""
+(company_name, function, website, phone). Recruitment > Job board > Recruiters lists the hirers."""
 import re
 
 from odoo import api, fields, models

@@ -172,33 +172,110 @@
     <template id="my_jobs" name="LLMD: my posted jobs">
         <t t-call="website.layout">
             <t t-set="additional_title">My jobs</t>
-            <div id="wrap" class="o_llmd_board o_llmd_post_page">
+            <div id="wrap" class="o_llmd_board o_llmd_post_page o_llmd_dash">
                 <div class="container o_llmd_post_wrap o_llmd_post_wide">
-                    <div class="o_llmd_post_headrow">
-                        <h1 class="o_llmd_h2">My jobs</h1>
-                        <a href="/jobs/post" class="btn o_llmd_btn_primary"><i class="fa fa-plus" aria-hidden="true"/> Post a job</a>
+                    <!-- header: who, what, the main actions -->
+                    <div class="o_llmd_dash_head">
+                        <div>
+                            <span class="o_llmd_dash_eyebrow"><i class="fa fa-briefcase" aria-hidden="true"/> Employer dashboard</span>
+                            <h1 class="o_llmd_dash_title">My jobs</h1>
+                            <p class="o_llmd_dash_sub">Hi <t t-out="(request.env.user.name or '').split(' ')[0] or 'there'"/> - your jobs, applicants and job credits in one place.</p>
+                        </div>
+                        <div class="o_llmd_dash_actions">
+                            <a href="/my/invoices" class="btn o_llmd_btn_ghost"><i class="fa fa-file-text-o" aria-hidden="true"/> Invoices</a>
+                            <a href="/jobs/post" class="btn o_llmd_btn_primary"><i class="fa fa-plus" aria-hidden="true"/> Post a job</a>
+                        </div>
                     </div>
-                    <div t-if="just_edited" class="alert alert-success" role="status">Saved - <b t-out="just_edited.title"/> is sent to our team again. We publish it after a quick check and send you an e-mail.</div>
-                    <div t-if="just_posted" class="alert alert-success" role="status">Thank you - <b t-out="just_posted.title"/> is sent for review. We publish it after a quick check and send you an e-mail.</div>
-                    <div t-if="not posts" class="o_llmd_empty"><p class="o_llmd_empty_title">No jobs posted yet.</p><p class="mb-0">Post your first job - it's free.</p></div>
-                    <div t-else="" class="o_llmd_my_table">
-                        <div class="o_llmd_my_row o_llmd_my_th"><span>Job</span><span>Status</span><span>Applicants</span><span/></div>
-                        <div t-foreach="posts" t-as="p" class="o_llmd_my_row">
-                            <span class="o_llmd_my_job">
-                                <a t-if="p.post_state == 'live'" t-att-href="p.website_path()" t-out="p.title"/><b t-else="" t-out="p.title"/>
-                                <small><t t-out="p.company"/> · <t t-out="p.location"/><t t-if="p.post_state == 'live' and p.expires_on"> · open until <t t-out="p.expires_on"/></t></small>
-                                <small t-if="p.post_state == 'rejected' and p.reject_reason" class="text-danger">Not published: <t t-out="p.reject_reason"/></small>
-                            </span>
-                            <span><span t-attf-class="o_llmd_state o_llmd_state_#{p.post_state}" t-out="states.get(p.post_state)"/></span>
-                            <span><a t-if="counts.get(p.id)" t-attf-href="/jobs/my/#{p.id}/applicants"><t t-out="counts[p.id]"/> - view</a><t t-else="">0</t></span>
-                            <span class="o_llmd_my_act">
-                                <a t-if="p.post_state in ('pending', 'live', 'rejected')" t-attf-href="/jobs/my/#{p.id}/edit" class="btn btn-link btn-sm"><i class="fa fa-pencil" aria-hidden="true"/> <t t-out="'Edit and send again' if p.post_state == 'rejected' else 'Edit'"/></a>
-                                <form t-if="p.post_state == 'live'" method="post" t-attf-action="/jobs/my/#{p.id}/close"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Close job</button></form>
-                                <form t-if="p.post_state == 'closed'" method="post" t-attf-action="/jobs/my/#{p.id}/reopen"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm">Reopen</button></form>
+                    <div t-if="just_edited" class="alert alert-success o_llmd_dash_alert" role="status"><i class="fa fa-check-circle" aria-hidden="true"/> Saved - <b t-out="just_edited.title"/> is sent to our team again. We publish it after a quick check and send you an e-mail.</div>
+                    <div t-if="just_posted" class="alert alert-success o_llmd_dash_alert" role="status"><i class="fa fa-check-circle" aria-hidden="true"/> Thank you - <b t-out="just_posted.title"/> is sent for review. We publish it after a quick check and send you an e-mail.</div>
+
+                    <!-- credits -->
+                    <div t-if="credit" class="o_llmd_dash_stats">
+                        <div class="o_llmd_stat o_llmd_stat_main">
+                            <span class="o_llmd_stat_label">Credits left</span>
+                            <b class="o_llmd_stat_n" t-out="credit['left']"/>
+                            <span class="o_llmd_stat_hint" t-out="'jobs you can still post' if credit['left'] != 1 else 'job you can still post'"/>
+                            <a href="/jobs/employers#plans" class="o_llmd_stat_link"><t t-out="'Buy more jobs' if credit['left'] else 'Buy a package'"/> <i class="fa fa-arrow-right" aria-hidden="true"/></a>
+                        </div>
+                        <div class="o_llmd_stat">
+                            <i class="fa fa-shopping-bag o_llmd_stat_icon" aria-hidden="true"/>
+                            <span class="o_llmd_stat_label">Jobs bought</span>
+                            <b class="o_llmd_stat_n" t-out="credit['bought']"/>
+                        </div>
+                        <div class="o_llmd_stat">
+                            <i class="fa fa-check-square-o o_llmd_stat_icon" aria-hidden="true"/>
+                            <span class="o_llmd_stat_label">Credits used</span>
+                            <b class="o_llmd_stat_n" t-out="credit['used']"/>
+                        </div>
+                        <div class="o_llmd_stat">
+                            <i class="fa fa-gift o_llmd_stat_icon" aria-hidden="true"/>
+                            <span class="o_llmd_stat_label">Free job</span>
+                            <b class="o_llmd_stat_n"><t t-out="credit['free_used']"/><small t-out="' / %s used' % credit['free_total']"/></b>
+                        </div>
+                        <div class="o_llmd_stat">
+                            <i class="fa fa-folder-open-o o_llmd_stat_icon" aria-hidden="true"/>
+                            <span class="o_llmd_stat_label">Open now</span>
+                            <b class="o_llmd_stat_n"><t t-out="credit['open']"/><small t-out="' / %s' % credit['max_open']"/></b>
+                            <span class="o_llmd_stat_bar" role="img" t-att-aria-label="'%s of %s jobs open' % (credit['open'], credit['max_open'])">
+                                <span t-attf-style="width: #{int(100 * credit['open'] / credit['max_open']) if credit['max_open'] else 0}%"/>
                             </span>
                         </div>
                     </div>
-                    <p class="o_llmd_post_small">Up to <t t-out="max_open"/> jobs can be pending or live at a time. <a href="/my/invoices"><i class="fa fa-file-text-o" aria-hidden="true"/> Your invoices</a></p>
+
+                    <!-- status tabs -->
+                    <nav t-if="total_posts" class="o_llmd_my_tabs" aria-label="Filter my jobs by status">
+                        <a href="/jobs/my" t-attf-class="o_llmd_my_tab #{'active' if not status else ''}">All <b t-out="total_posts"/></a>
+                        <t t-foreach="states.items()" t-as="st">
+                            <a t-if="state_counts.get(st[0])" t-attf-href="/jobs/my?status=#{st[0]}"
+                               t-attf-class="o_llmd_my_tab o_llmd_my_tab_#{st[0]} #{'active' if status == st[0] else ''}"><t t-out="st[1]"/> <b t-out="state_counts[st[0]]"/></a>
+                        </t>
+                    </nav>
+
+                    <!-- the jobs -->
+                    <div t-if="status and not posts" class="o_llmd_dash_empty"><p class="mb-0">No jobs here. <a href="/jobs/my">See all your jobs</a></p></div>
+                    <div t-elif="not posts" class="o_llmd_dash_empty">
+                        <i class="fa fa-briefcase" aria-hidden="true"/>
+                        <p class="o_llmd_dash_empty_title">No jobs posted yet</p>
+                        <p>Post your first job - it's free. Our team checks it and it goes live for 30 days.</p>
+                        <a href="/jobs/post" class="btn o_llmd_btn_primary"><i class="fa fa-plus" aria-hidden="true"/> Post a job</a>
+                    </div>
+                    <div t-else="" class="o_llmd_dash_list">
+                        <article t-foreach="posts" t-as="p" t-attf-class="o_llmd_jobcard o_llmd_jobcard_#{p.post_state}">
+                            <div class="o_llmd_jobcard_logo" aria-hidden="true" t-out="(p.company or p.title or '?')[:1].upper()"/>
+                            <div class="o_llmd_jobcard_main">
+                                <div class="o_llmd_jobcard_top">
+                                    <h2 class="o_llmd_jobcard_title">
+                                        <a t-if="p.post_state == 'live'" t-att-href="p.website_path()" t-out="p.title"/><t t-else="" t-out="p.title"/>
+                                    </h2>
+                                    <span t-attf-class="o_llmd_state o_llmd_state_#{p.post_state}" t-out="states.get(p.post_state)"/>
+                                </div>
+                                <p class="o_llmd_jobcard_meta">
+                                    <span t-if="p.company"><i class="fa fa-building-o" aria-hidden="true"/> <t t-out="p.company"/></span>
+                                    <span t-if="p.location"><i class="fa fa-map-marker" aria-hidden="true"/> <t t-out="p.location"/></span>
+                                    <span t-if="p.post_state == 'live' and p.expires_on"><i class="fa fa-calendar" aria-hidden="true"/> Open until <t t-out="p.expires_on.strftime('%d %b %Y')"/></span>
+                                    <span t-if="p.post_state != 'rejected'" t-attf-class="o_llmd_chip #{'o_llmd_chip_paid' if p.post_paid else 'o_llmd_chip_free'}" t-out="'Paid with a credit' if p.post_paid else 'Free job'"/>
+                                    <span t-else="" class="o_llmd_chip">Credit given back</span>
+                                </p>
+                                <p t-if="p.post_state == 'pending'" class="o_llmd_jobcard_note"><i class="fa fa-clock-o" aria-hidden="true"/> Waiting for our team's check - you get an e-mail when it is live.</p>
+                                <div t-if="p.post_state == 'rejected'" class="o_llmd_reject_box">
+                                    <i class="fa fa-info-circle" aria-hidden="true"/> <b>Why it was not published:</b> <t t-out="p.reject_reason or 'No reason given - write to us.'"/>
+                                    <br/>Fix it with <b>Edit and send again</b> - our team checks it again.
+                                </div>
+                            </div>
+                            <div class="o_llmd_jobcard_side">
+                                <a t-if="counts.get(p.id)" t-attf-href="/jobs/my/#{p.id}/applicants" class="o_llmd_jobcard_apps o_llmd_jobcard_apps_on">
+                                    <b t-out="counts[p.id]"/> <span t-out="'applicant' if counts[p.id] == 1 else 'applicants'"/> <i class="fa fa-arrow-right" aria-hidden="true"/>
+                                </a>
+                                <span t-else="" class="o_llmd_jobcard_apps"><b>0</b> <span>applicants</span></span>
+                                <div class="o_llmd_jobcard_act">
+                                    <a t-if="p.post_state in ('pending', 'live', 'rejected')" t-attf-href="/jobs/my/#{p.id}/edit" class="btn o_llmd_btn_ghost btn-sm"><i class="fa fa-pencil" aria-hidden="true"/> <t t-out="'Edit and send again' if p.post_state == 'rejected' else 'Edit'"/></a>
+                                    <form t-if="p.post_state == 'live'" method="post" t-attf-action="/jobs/my/#{p.id}/close"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn btn-link btn-sm o_llmd_jobcard_close">Close job</button></form>
+                                    <form t-if="p.post_state == 'closed'" method="post" t-attf-action="/jobs/my/#{p.id}/reopen"><input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/><button type="submit" class="btn o_llmd_btn_ghost btn-sm"><i class="fa fa-refresh" aria-hidden="true"/> Reopen</button></form>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <p class="o_llmd_dash_foot"><i class="fa fa-info-circle" aria-hidden="true"/> Up to <b t-out="max_open"/> jobs can be pending or live at a time. A job stays live for 30 days; a rejected job gives its credit back.</p>
                 </div>
             </div>
         </t>
@@ -263,7 +340,7 @@
          Shown to a hirer, or to anybody who already posted a job. -->
     <template id="hirer_user_menu" name="LLMD: My jobs in the account menu" inherit_id="portal.user_dropdown">
         <xpath expr="//*[@id='o_logout_divider']" position="before">
-            <t t-set="llmd_hirer" t-value="user_id.partner_id.llmd_role == 'hirer' or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', user_id.id), ('post_kind', '=', 'employer')], limit=1)"/>
+            <t t-set="llmd_hirer" t-value="user_id.partner_id.llmd_role == 'hirer' or user_id.partner_id.sudo().llmd_is_employer or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', user_id.id), ('post_kind', '=', 'employer')], limit=1)"/>
             <a t-if="llmd_hirer" href="/jobs/my" role="menuitem" class="dropdown-item ps-3">
                 <i class="fa fa-fw fa-briefcase me-1 small text-primary-emphasis"/> My jobs
             </a>
@@ -275,7 +352,7 @@
 
     <template id="hirer_portal_card" name="LLMD: My jobs on My Account" inherit_id="portal.portal_my_home">
         <xpath expr="//div[@id='portal_common_category']" position="inside">
-            <t t-set="llmd_hirer" t-value="request.env.user.partner_id.llmd_role == 'hirer' or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', request.env.user.id), ('post_kind', '=', 'employer')], limit=1)"/>
+            <t t-set="llmd_hirer" t-value="request.env.user.partner_id.llmd_role == 'hirer' or request.env.user.partner_id.sudo().llmd_is_employer or request.env['llmd.job.listing'].sudo().with_context(active_test=False).search_count([('poster_id', '=', request.env.user.id), ('post_kind', '=', 'employer')], limit=1)"/>
             <t t-if="llmd_hirer" t-call="portal.portal_docs_entry">
                 <t t-set="icon" t-value="'/llmd_job_aggregator/static/src/img/portal-my-jobs.svg'"/>
                 <t t-set="title">My jobs</t>

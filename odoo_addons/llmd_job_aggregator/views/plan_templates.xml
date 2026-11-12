@@ -105,6 +105,38 @@
         <field name="active" eval="True"/>
     </record>
 
+    <!-- Invoicing > Payments: the Razorpay payment ID in its own field (the memo keeps our reference LLMDPLAN-<id>) -->
+    <record id="llmd_account_payment_form" model="ir.ui.view">
+        <field name="name">account.payment.form.llmd.razorpay</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+            <field name="memo" position="after">
+                <field name="llmd_razorpay_payment_id" invisible="not llmd_razorpay_payment_id"/>
+            </field>
+        </field>
+    </record>
+    <record id="llmd_account_payment_list" model="ir.ui.view">
+        <field name="name">account.payment.list.llmd.razorpay</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_tree"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="llmd_razorpay_payment_id" optional="show"/>
+            </field>
+        </field>
+    </record>
+    <record id="llmd_account_payment_search" model="ir.ui.view">
+        <field name="name">account.payment.search.llmd.razorpay</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_search"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="llmd_razorpay_payment_id"/>
+            </field>
+        </field>
+    </record>
+
     <!-- backend: Job board > Subscribers (the plan requests) -->
     <record id="llmd_plan_request_list" model="ir.ui.view">
         <field name="name">llmd.plan.request.list</field>
@@ -122,10 +154,13 @@
                 <field name="amount" sum="Total"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="payment_status" optional="show"/>
+                <field name="razorpay_payment_id" optional="show"/>
                 <field name="invoice_id" optional="show"/>
                 <field name="invoice_payment_state" widget="badge" optional="show" invisible="not invoice_id"
                        decoration-success="invoice_payment_state in ('paid', 'in_payment')" decoration-warning="invoice_payment_state == 'not_paid'"/>
                 <field name="paid_count" string="Payments" optional="show"/>
+                <field name="jobs_used" optional="show"/>
+                <field name="credits_left" string="Credits left" optional="show"/>
                 <field name="paid_twice" column_invisible="1"/>
                 <field name="state" widget="badge"/>
             </list>
@@ -169,11 +204,15 @@
                             <field name="user_id" readonly="1"/>
                             <field name="transaction_id"/>
                             <field name="payment_status"/>
+                            <field name="razorpay_payment_id" invisible="not razorpay_payment_id"/>
+                            <field name="razorpay_order_id" invisible="not razorpay_order_id"/>
                             <field name="invoice_id"/>
                             <field name="invoice_state" invisible="not invoice_id"/>
                             <field name="invoice_payment_state" invisible="not invoice_id"/>
                             <field name="credited"/>
                             <field name="paid_twice" invisible="1"/>
+                            <field name="jobs_bought"/>
+                            <field name="jobs_used"/>
                             <field name="credits_left"/>
                         </group>
                         <group string="Contact">

@@ -1951,3 +1951,120 @@ html.o_llmd_auth_on { overflow: hidden; }
 .o_llmd_board .o_llmd_planreq_have { margin: .3rem 0 0; text-align: center; font-size: .85rem; color: var(--ink-2); }
 .o_llmd_board .o_llmd_credit_note { display: flex; align-items: center; gap: .5rem; border-radius: 12px; }
 .o_llmd_board .o_llmd_credit_note a { font-weight: 800; }
+
+/* My jobs: the status tabs (All / Live / Pending review / Rejected / Closed) and the reason of a rejected job */
+.o_llmd_post_page .o_llmd_my_tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.o_llmd_post_page .o_llmd_my_tab {
+    padding: 6px 14px; border: 1px solid #e5e7f0; border-radius: 999px; background: #fff;
+    color: #374151; font-size: .9rem; text-decoration: none;
+}
+.o_llmd_post_page .o_llmd_my_tab b { margin-left: 4px; }
+.o_llmd_post_page .o_llmd_my_tab:hover { border-color: #a5b4fc; }
+.o_llmd_post_page .o_llmd_my_tab.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+.o_llmd_post_page .o_llmd_my_tab_live:not(.active) b { color: #047857; }
+.o_llmd_post_page .o_llmd_my_tab_pending:not(.active) b { color: #92400e; }
+.o_llmd_post_page .o_llmd_my_tab_rejected:not(.active) b { color: #b91c1c; }
+.o_llmd_post_page .o_llmd_reject_box {
+    display: block; margin-top: 6px; padding: 8px 10px; border-radius: 8px;
+    background: #fef2f2; color: #991b1b; font-size: .85rem; line-height: 1.4;
+}
+
+/* ===== My jobs - the employer dashboard (/jobs/my) ===== */
+.o_llmd_dash .o_llmd_post_wrap { padding-top: 2rem; padding-bottom: 3rem; }
+.o_llmd_dash .o_llmd_dash_head {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem;
+    margin-bottom: 1.5rem; padding: 1.5rem 1.75rem; border: 1px solid var(--line); border-radius: 20px;
+    background: radial-gradient(120% 140% at 100% 0%, rgba(124, 58, 237, .10) 0%, rgba(37, 99, 235, .06) 45%, #fff 75%);
+}
+.o_llmd_dash .o_llmd_dash_eyebrow {
+    display: inline-flex; align-items: center; gap: .4rem; padding: .25rem .7rem; border-radius: 999px;
+    background: var(--lav); color: var(--violet-deep); font-size: var(--fs-tag); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.o_llmd_dash .o_llmd_dash_title { margin: .55rem 0 .25rem; font-family: var(--font-head); font-size: var(--fs-h2); font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
+.o_llmd_dash .o_llmd_dash_sub { margin: 0; color: var(--muted); font-size: var(--fs-body); }
+.o_llmd_dash .o_llmd_dash_actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.o_llmd_dash .o_llmd_dash_actions .o_llmd_btn_ghost { height: var(--ctl); }
+.o_llmd_dash .o_llmd_dash_alert { display: block; border-radius: 14px; }
+.o_llmd_dash .o_llmd_dash_alert > .fa { margin-right: .35rem; }
+
+/* the credit cards */
+.o_llmd_dash .o_llmd_dash_stats { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: .9rem; margin-bottom: 1.75rem; }
+.o_llmd_dash .o_llmd_stat {
+    position: relative; display: flex; flex-direction: column; gap: .2rem; padding: 1rem 1.1rem; border: 1px solid var(--line);
+    border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.o_llmd_dash .o_llmd_stat_icon {
+    display: grid; place-items: center; width: 2rem; height: 2rem; margin-bottom: .35rem; border-radius: 10px;
+    background: var(--lav); color: var(--violet-deep); font-size: .95rem;
+}
+.o_llmd_dash .o_llmd_stat_label { font-size: var(--fs-label); font-weight: 600; color: var(--muted); }
+.o_llmd_dash .o_llmd_stat_n { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; line-height: 1.15; color: var(--ink); }
+.o_llmd_dash .o_llmd_stat_n small { margin-left: .15rem; font-size: .9rem; font-weight: 600; color: var(--soft); }
+.o_llmd_dash .o_llmd_stat_main { justify-content: center; border: 0; background: var(--grad); color: #fff; box-shadow: var(--glow); }
+.o_llmd_dash .o_llmd_stat_main .o_llmd_stat_label, .o_llmd_dash .o_llmd_stat_main .o_llmd_stat_hint { color: rgba(255, 255, 255, .85); }
+.o_llmd_dash .o_llmd_stat_main .o_llmd_stat_n { font-size: 2.6rem; color: #fff; }
+.o_llmd_dash .o_llmd_stat_hint { font-size: var(--fs-label); }
+.o_llmd_dash .o_llmd_stat_link { margin-top: .5rem; color: #fff; font-size: var(--fs-label); font-weight: 700; text-decoration: none; }
+.o_llmd_dash .o_llmd_stat_link:hover { color: #fff; text-decoration: underline; }
+.o_llmd_dash .o_llmd_stat_bar { display: block; height: 6px; margin-top: .5rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.o_llmd_dash .o_llmd_stat_bar > span { display: block; height: 100%; border-radius: 999px; background: var(--grad); }
+
+/* the job cards */
+.o_llmd_dash .o_llmd_dash_list { display: flex; flex-direction: column; gap: .8rem; }
+.o_llmd_dash .o_llmd_jobcard {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 1rem 1.1rem; align-items: start; padding: 1.1rem 1.25rem;
+    border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 16px; background: #fff;
+    transition: box-shadow .2s ease, border-color .2s ease;
+}
+.o_llmd_dash .o_llmd_jobcard:hover { box-shadow: 0 8px 24px rgba(15, 23, 42, .07); }
+.o_llmd_dash .o_llmd_jobcard_live { border-left-color: #10b981; }
+.o_llmd_dash .o_llmd_jobcard_pending { border-left-color: #f59e0b; }
+.o_llmd_dash .o_llmd_jobcard_rejected { border-left-color: #ef4444; }
+.o_llmd_dash .o_llmd_jobcard_closed { border-left-color: #cbd5e1; }
+.o_llmd_dash .o_llmd_jobcard_logo {
+    display: grid; place-items: center; width: 2.9rem; height: 2.9rem; border-radius: 12px; border: 1px solid var(--line);
+    background: linear-gradient(150deg, rgba(37, 99, 235, .12) 0%, var(--surface-2) 100%); color: var(--violet-deep); font-weight: 800; font-size: 1.1rem;
+}
+.o_llmd_dash .o_llmd_jobcard_main { min-width: 0; }
+.o_llmd_dash .o_llmd_jobcard_top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+.o_llmd_dash .o_llmd_jobcard_title { margin: 0; font-family: var(--font-head); font-size: var(--fs-title); font-weight: 700; color: var(--ink); }
+.o_llmd_dash .o_llmd_jobcard_title a { color: var(--ink); text-decoration: none; }
+.o_llmd_dash .o_llmd_jobcard_title a:hover { color: var(--violet); text-decoration: underline; }
+.o_llmd_dash .o_llmd_jobcard_meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; margin: .4rem 0 0; font-size: var(--fs-label); color: var(--muted); }
+.o_llmd_dash .o_llmd_jobcard_meta i { color: var(--soft); margin-right: .15rem; }
+.o_llmd_dash .o_llmd_chip { padding: .1rem .55rem; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-tag); font-weight: 700; }
+.o_llmd_dash .o_llmd_chip_free { background: #ecfdf5; color: #047857; }
+.o_llmd_dash .o_llmd_chip_paid { background: var(--lav); color: var(--violet-deep); }
+.o_llmd_dash .o_llmd_jobcard_note { margin: .55rem 0 0; font-size: var(--fs-label); color: #92400e; }
+.o_llmd_dash .o_llmd_jobcard_side { display: flex; flex-direction: column; align-items: flex-end; gap: .6rem; }
+.o_llmd_dash .o_llmd_jobcard_apps {
+    display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .75rem; border-radius: 999px; background: var(--surface-2);
+    color: var(--muted); font-size: var(--fs-label); text-decoration: none; white-space: nowrap;
+}
+.o_llmd_dash .o_llmd_jobcard_apps b { color: var(--ink); }
+.o_llmd_dash .o_llmd_jobcard_apps_on { background: var(--lav); color: var(--violet-deep); font-weight: 600; }
+.o_llmd_dash .o_llmd_jobcard_apps_on:hover { background: rgba(37, 99, 235, .14); color: var(--violet-deep); }
+.o_llmd_dash .o_llmd_jobcard_apps_on b { color: var(--violet-deep); }
+.o_llmd_dash .o_llmd_jobcard_act { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .35rem; }
+.o_llmd_dash .o_llmd_jobcard_act form { margin: 0; }
+.o_llmd_dash .o_llmd_jobcard_act .o_llmd_btn_ghost { height: 2rem; padding: 0 .8rem; font-size: var(--fs-label); }
+.o_llmd_dash .o_llmd_jobcard_close { color: #b91c1c; font-size: var(--fs-label); font-weight: 600; text-decoration: none; }
+.o_llmd_dash .o_llmd_jobcard_close:hover { color: #991b1b; text-decoration: underline; }
+.o_llmd_dash .o_llmd_reject_box { margin-top: .6rem; }
+
+.o_llmd_dash .o_llmd_dash_empty {
+    padding: 2.5rem 1.5rem; border: 1px dashed var(--line-ctl); border-radius: 18px; background: var(--surface-2); text-align: center; color: var(--muted);
+}
+.o_llmd_dash .o_llmd_dash_empty > .fa { font-size: 2rem; color: var(--violet); margin-bottom: .6rem; }
+.o_llmd_dash .o_llmd_dash_empty_title { margin: 0 0 .25rem; font-size: var(--fs-title); font-weight: 700; color: var(--ink); }
+.o_llmd_dash .o_llmd_dash_foot { display: flex; align-items: baseline; gap: .45rem; margin: 1.25rem 0 0; font-size: var(--fs-label); color: var(--muted); }
+
+@media (max-width: 991.98px) {
+    .o_llmd_dash .o_llmd_dash_stats { grid-template-columns: repeat(2, 1fr); }
+    .o_llmd_dash .o_llmd_stat_main { grid-column: 1 / -1; }
+}
+@media (max-width: 575.98px) {
+    .o_llmd_dash .o_llmd_dash_head { padding: 1.25rem; }
+    .o_llmd_dash .o_llmd_jobcard { grid-template-columns: auto 1fr; padding: 1rem; }
+    .o_llmd_dash .o_llmd_jobcard_side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+}

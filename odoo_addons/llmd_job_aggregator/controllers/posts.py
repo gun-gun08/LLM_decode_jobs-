@@ -256,18 +256,25 @@ class LlmdJobPosts(http.Controller):
         return response
 
     @http.route('/jobs/my', type='http', auth='public', website=True, sitemap=False)
-    def llmd_my_jobs(self, posted=None, edited=None, **kwargs):
+    def llmd_my_jobs(self, posted=None, edited=None, status=None, **kwargs):
         if (moved := self._llmd_hire_redirect()):
             return moved
         user = self._llmd_employer()
         if not user:
             return request.redirect('/web/login?redirect=/jobs/my')
         posts = request.env['llmd.job.listing'].sudo().with_context(active_test=False).search([('poster_id', '=', user.id), ('post_kind', '=', 'employer')], order='id desc')
+        state_counts = {code: len(posts.filtered(lambda p, c=code: p.post_state == c)) for code, _label in PO.POST_STATES}
+        status = status if status in state_counts else ''
+        all_posts = posts
+        if status:                                                      # the tabs: All / Live / Pending review / Rejected / Closed
+            posts = posts.filtered(lambda p: p.post_state == status)
         counts = {p.id: len(p.employer_applications()) for p in posts}
-        just = posts.filtered(lambda p: str(p.id) == (posted or ''))
-        changed = posts.filtered(lambda p: str(p.id) == (edited or ''))
+        just = all_posts.filtered(lambda p: str(p.id) == (posted or ''))
+        changed = all_posts.filtered(lambda p: str(p.id) == (edited or ''))
         return request.render('llmd_job_aggregator.my_jobs', {'posts': posts, 'counts': counts, 'just_posted': just[:1], 'just_edited': changed[:1], 'max_open': request.env['llmd.job.listing'].sudo().max_open_of(user),
-                                                              'states': dict(PO.POST_STATES)})
+                                                              'credit': request.env['llmd.job.listing'].sudo().credit_summary(user),
+                                                              'states': dict(PO.POST_STATES), 'state_counts': state_counts, 'status': status,
+                                                              'total_posts': len(all_posts)})
 
     @http.route('/jobs/my/<int:post_id>/applicants', type='http', auth='public', website=True, sitemap=False)
     def llmd_my_applicants(self, post_id, **kwargs):

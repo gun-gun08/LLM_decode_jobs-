@@ -73,7 +73,12 @@ class LlmdPlanRequest(models.Model):
     jobs = fields.Integer(string='Job credits', help='The job credits this plan adds to the account once it is paid.')
     credited = fields.Boolean(string='Credits added', readonly=True, copy=False)
     transaction_id = fields.Many2one('payment.transaction', string='Payment', readonly=True, copy=False)
+    razorpay_payment_id = fields.Char(related='transaction_id.provider_reference', string='Razorpay payment ID',
+                                      help='The payment ID in Razorpay (pay_...): search it in the Razorpay dashboard > Transactions > Payments.')
+    razorpay_order_id = fields.Char(related='transaction_id.llmd_razorpay_order_id', string='Razorpay order ID')
     credits_left = fields.Integer(related='user_id.partner_id.llmd_job_credits', string='Credits left on the account')
+    jobs_bought = fields.Integer(related='user_id.partner_id.llmd_jobs_bought', string='Jobs bought (account)')
+    jobs_used = fields.Integer(related='user_id.partner_id.llmd_jobs_used', string='Credits used (account)')
     paid_count = fields.Integer(string='Payments received', readonly=True, copy=False,
                                 help='How many times this plan was paid. More than one: the employer paid twice (e.g. paid again while the first payment was '
                                      'still being confirmed) - every payment added its credits; refund one in Razorpay and take the credits back if needed.')
@@ -87,6 +92,12 @@ class LlmdPlanRequest(models.Model):
     linkedin = fields.Char(string='Company LinkedIn')
     note = fields.Text(string='Message')
     user_id = fields.Many2one('res.users', string='Account', ondelete='set null', help='The signed-in account that sent the request, if any.')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records.user_id.partner_id.sudo().filtered(lambda p: not p.llmd_is_employer).write({'llmd_is_employer': True})
+        return records
 
     @api.depends('first_name', 'last_name', 'company')
     def _compute_name(self):
@@ -219,16 +230,75 @@ class LlmdPlanRequest(models.Model):
             self.company_site or '', self.note or '')
         try:
             with self.env.cr.savepoint():
-                self.env['mail.mail'].sudo().create({'subject': 'New subscriber: %s' % self.company, 'email_to': to, 'body_html': str(body), 'auto_delete': True,
+                self.env['mail.mail'].sudo().create({'subject': 'New subscriber: %s' % self.company, 'email_to': to, 'body_html': str(body), 'auto_delete': False,
+                                                     'llmd_kind': 'team', 'llmd_ref': 'Subscriber %d: %s' % (self.id, self.company or ''),
                                                      'reply_to': self.email, 'email_from': self.env.company.email_formatted or False})
         except Exception:
             _logger.warning('plan request %s: the e-mail to the team could not be queued', self.id, exc_info=True)
+
+
+class AccountPayment(models.Model):
+    _inherit = 'account.payment'
+
+    llmd_razorpay_payment_id = fields.Char(related='payment_transaction_id.provider_reference', string='Razorpay payment ID',
+                                           help='The payment ID in Razorpay (pay_...): search it in the Razorpay dashboard > Transactions > Payments.')
+
+
+class MailMail(models.Model):
+    _inherit = 'mail.mail'
+
+    llmd_kind = fields.Selection([('team', 'To our team'), ('employer', 'To the employer')], string='Job board e-mail', index=True, copy=False)
+    llmd_ref = fields.Char(string='About', copy=False)
 
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     llmd_job_credits = fields.Integer(string='Job credits', default=0, help='Paid jobs this employer can still post on the job board (the first job is free).')
+    llmd_jobs_bought = fields.Integer(string='Jobs bought', compute='_compute_llmd_jobs', help='Job credits of all the paid packages of this account.')
+    llmd_jobs_used = fields.Integer(string='Credits used', compute='_compute_llmd_jobs', help='Jobs posted with a credit (a rejected job gives its credit back).')
+    llmd_is_employer = fields.Boolean(string='Job board employer', index=True, copy=False,
+                                      help='This account posted a job or bought a package on the job board (Job board > Recruiters).')
+    llmd_free_used = fields.Integer(string='Free used', compute='_compute_llmd_jobs')
+    llmd_posts_total = fields.Integer(string='Jobs posted', compute='_compute_llmd_jobs')
+    llmd_posts_live = fields.Integer(string='Live', compute='_compute_llmd_jobs')
+    llmd_posts_pending = fields.Integer(string='Pending', compute='_compute_llmd_jobs')
+    llmd_posts_rejected = fields.Integer(string='Rejected', compute='_compute_llmd_jobs')
+    llmd_posts_closed = fields.Integer(string='Closed', compute='_compute_llmd_jobs')
+    llmd_open_text = fields.Char(string='Open now', compute='_compute_llmd_jobs', help='Jobs pending or live now, of the jobs allowed open at once.')
+
+    def _compute_llmd_jobs(self):
+        Req = self.env['llmd.plan.request'].sudo()
+        Post = self.env['llmd.job.listing'].sudo().with_context(active_test=False)
+        free = self.env['llmd.hr.package'].sudo().free_package()
+        for partner in self:
+            users = partner.user_ids
+            paid = Req.search([('user_id', 'in', users.ids), ('state', '=', 'paid'), ('credited', '=', True)]) if users else Req
+            posts = Post.search([('poster_id', 'in', users.ids), ('post_kind', '=', 'employer')]) if users else Post
+            states = posts.mapped('post_state')
+            partner.llmd_jobs_bought = sum(r.jobs * max(r.paid_count, 1) for r in paid)
+            partner.llmd_jobs_used = len(posts.filtered('post_paid'))
+            partner.llmd_free_used = min(len(posts.filtered(lambda p: p.post_state != 'rejected' and not p.post_paid)), free.limit if free else 0)
+            partner.llmd_posts_total = len(posts)
+            partner.llmd_posts_live = states.count('live')
+            partner.llmd_posts_pending = states.count('pending')
+            partner.llmd_posts_rejected = states.count('rejected')
+            partner.llmd_posts_closed = states.count('closed')
+            max_open = Post.max_open_of(users[:1]) if users else 0
+            partner.llmd_open_text = '%d of %d' % (partner.llmd_posts_live + partner.llmd_posts_pending, max_open)
+
+    @api.model
+    def _llmd_mark_employers(self):
+        """On upgrade: the accounts that already posted a job or bought a package show under Job board > Recruiters."""
+        users = self.env['llmd.job.listing'].sudo().with_context(active_test=False).search([('post_kind', '=', 'employer'), ('poster_id', '!=', False)]).poster_id
+        users |= self.env['llmd.plan.request'].sudo().search([('user_id', '!=', False)]).user_id
+        users.partner_id.filtered(lambda p: not p.llmd_is_employer).write({'llmd_is_employer': True})
+
+    def action_llmd_subscriptions(self):
+        self.ensure_one()
+        return {'type': 'ir.actions.act_window', 'name': 'Packages of %s' % self.name, 'res_model': 'llmd.plan.request', 'view_mode': 'list,form',
+                'domain': [('user_id', 'in', self.user_ids.ids)]}
+
     llmd_max_open = fields.Integer(string='Open jobs allowed', help='Jobs this employer may have open (pending + live) at once, from the packages bought. Empty: the default (5).')
 
 
@@ -291,6 +361,9 @@ class PaymentTransaction(models.Model):
                     invoice.invoice_origin = tx.reference
                     tx.sudo().invoice_ids = [(4, invoice.id)]
         super()._post_process()
+        for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX) and t.payment_id):
+            if tx.payment_id.memo != tx.reference:              # Odoo writes "<reference> - <Razorpay ID>": the ID is shown on its own
+                tx.payment_id.sudo().memo = tx.reference
         for tx in self.filtered(lambda t: t.state == 'done' and (t.reference or '').startswith(REF_PREFIX)):
             match = re.match(r'%s(\d+)' % REF_PREFIX, tx.reference)
             req = Request.browse(int(match.group(1))).exists() if match else Request

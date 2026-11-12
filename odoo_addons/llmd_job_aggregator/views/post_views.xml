@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- ======= jobs posted on the website itself (models/post.py): Recruitment > Job board > Our posts / Employer posts ======= -->
+    <!-- ======= jobs posted on the website itself (models/post.py): Recruitment > Job board > Our posts / Job posts ======= -->
     <record id="llmd_job_post_list" model="ir.ui.view">
         <field name="name">llmd.job.listing.post.list</field>
         <field name="model">llmd.job.listing</field>
@@ -13,6 +13,11 @@
                 <field name="location"/>
                 <field name="poster_id" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
                 <field name="contact_email" optional="hide"/>
+                <field name="post_paid" string="Credit" optional="show" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
+                <field name="reject_reason" optional="show" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
+                <field name="last_edit" optional="hide" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
+                <field name="reviewed_by" optional="show" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
+                <field name="reviewed_on" optional="hide" column_invisible="context.get('default_post_kind') == 'llmdecode'"/>
                 <field name="apply_how" optional="show"/>
                 <field name="posted"/>
                 <field name="expires_on"/>
@@ -38,6 +43,10 @@
                 <sheet>
                     <field name="post_kind" invisible="1"/>
                     <field name="active" invisible="1"/>
+                    <div class="alert alert-info" role="status" invisible="post_state != 'pending' or not edit_count">
+                        <i class="fa fa-pencil"/> The employer <b>edited</b> this job (<field name="edit_count" readonly="1" class="d-inline"/> time(s), last on
+                        <field name="last_edit" readonly="1" class="d-inline"/>) - it is back in Pending review. Check the changes before you approve it again.
+                    </div>
                     <div class="alert alert-warning" role="status" invisible="post_state != 'pending'">
                         Posted by an employer on the website: check it (real company, real job, no fees asked from candidates) before you approve it.
                     </div>
@@ -62,10 +71,14 @@
                             <field name="posted" readonly="1"/>
                             <field name="page_url" widget="url" readonly="1" invisible="not active"/>
                         </group>
-                        <group string="Employer" invisible="post_kind != 'employer'">
+                        <group string="Recruiter" invisible="post_kind != 'employer'">
                             <field name="poster_id"/>
                             <field name="contact_email"/>
                             <field name="reject_reason" placeholder="Shown to the employer when you reject"/>
+                            <field name="edit_count" invisible="not edit_count"/>
+                            <field name="last_edit" invisible="not last_edit"/>
+                            <field name="reviewed_by" invisible="not reviewed_by"/>
+                            <field name="reviewed_on" invisible="not reviewed_on"/>
                         </group>
                     </group>
                     <separator string="Description"/>
@@ -87,9 +100,17 @@
                 <filter name="pending" string="Pending review" domain="[('post_state', '=', 'pending')]"/>
                 <filter name="live" string="Live" domain="[('post_state', '=', 'live')]"/>
                 <filter name="closed" string="Closed / rejected" domain="[('post_state', 'in', ('closed', 'rejected'))]"/>
+                <separator/>
+                <filter name="edited" string="Edited by the recruiter" domain="[('edit_count', '&gt;', 0)]"/>
+                <filter name="paid" string="Paid with a credit" domain="[('post_paid', '=', True)]"/>
                 <group>
                     <filter name="by_state" string="Status" context="{'group_by': 'post_state'}"/>
+                    <filter name="by_poster" string="Recruiter" context="{'group_by': 'poster_id'}"/>
+                    <filter name="by_reviewer" string="Reviewed by" context="{'group_by': 'reviewed_by'}"/>
                 </group>
+                <searchpanel>
+                    <field name="post_state" string="Status" icon="fa-filter" enable_counters="1" select="one"/>
+                </searchpanel>
             </search>
         </field>
     </record>
@@ -106,19 +127,68 @@
     </record>
 
     <record id="llmd_job_post_employer_action" model="ir.actions.act_window">
-        <field name="name">Employer posts</field>
+        <field name="name">Job posts</field>
         <field name="res_model">llmd.job.listing</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('post_kind', '=', 'employer')]</field>
-        <field name="context">{'active_test': False, 'search_default_pending': 1, 'create': False}</field>
+        <field name="context">{'active_test': False, 'searchpanel_default_post_state': 'pending', 'create': False}</field>
         <field name="search_view_id" ref="llmd_job_post_search"/>
         <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_job_post_list')}), (0, 0, {'view_mode': 'form', 'view_id': ref('llmd_job_post_form')})]"/>
-        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No employer posts to review</p><p>Employers post on the website (Jobs page > Post a job). Their jobs wait here until you approve them.</p></field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No job posts to review</p><p>Recruiters post on the website (Jobs page > Post a job). Their jobs wait here until you approve them.</p></field>
     </record>
 
     <menuitem id="llmd_job_post_llmd_menu" name="Our posts" parent="llmd_job_board_menu" action="llmd_job_post_llmd_action" sequence="5"
               groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
-    <menuitem id="llmd_job_post_employer_menu" name="Employer posts" parent="llmd_job_board_menu" action="llmd_job_post_employer_action" sequence="10"
+    <menuitem id="llmd_job_post_employer_menu" name="Job posts" parent="llmd_job_board_menu" action="llmd_job_post_employer_action" sequence="10"
+              groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
+
+    <function model="res.partner" name="_llmd_mark_employers"/>
+
+    <!-- Job board > E-mails: every job board e-mail (to our team and to employers), kept with its status -->
+    <record id="llmd_mail_list" model="ir.ui.view">
+        <field name="name">llmd.mail.list</field>
+        <field name="model">mail.mail</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list create="0" decoration-danger="state == 'exception'" decoration-muted="state == 'cancel'" decoration-info="state == 'outgoing'">
+                <field name="create_date" string="Date"/>
+                <field name="llmd_kind" string="To"/>
+                <field name="email_to" string="E-mail"/>
+                <field name="subject"/>
+                <field name="llmd_ref"/>
+                <field name="state" widget="badge" decoration-success="state == 'sent'" decoration-danger="state == 'exception'"/>
+                <field name="failure_reason" optional="show"/>
+            </list>
+        </field>
+    </record>
+    <record id="llmd_mail_search" model="ir.ui.view">
+        <field name="name">llmd.mail.search</field>
+        <field name="model">mail.mail</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="subject"/>
+                <field name="email_to"/>
+                <field name="llmd_ref"/>
+                <filter name="team" string="To our team" domain="[('llmd_kind', '=', 'team')]"/>
+                <filter name="employer" string="To employers" domain="[('llmd_kind', '=', 'employer')]"/>
+                <separator/>
+                <filter name="failed" string="Failed" domain="[('state', '=', 'exception')]"/>
+                <filter name="waiting" string="Waiting to send" domain="[('state', '=', 'outgoing')]"/>
+            </search>
+        </field>
+    </record>
+    <record id="llmd_mail_action" model="ir.actions.act_window">
+        <field name="name">E-mails</field>
+        <field name="res_model">mail.mail</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('llmd_kind', '!=', False)]</field>
+        <field name="context">{'create': False}</field>
+        <field name="search_view_id" ref="llmd_mail_search"/>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_mail_list')})]"/>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No job board e-mails yet</p><p>E-mails to our team (new job, new subscriber) and to employers (job live / not published, new application) show here with their status.</p></field>
+    </record>
+    <menuitem id="llmd_mail_menu" name="E-mails" parent="llmd_job_board_menu" action="llmd_mail_action" sequence="16"
               groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
 
     <!-- "Hire Talent" next to Jobs in the website menu (models/website_menu.py; added once per website, never twice) -->
@@ -231,9 +301,20 @@
                 <field name="website" widget="url" optional="show"/>
                 <field name="llmd_linkedin" widget="url" optional="hide"/>
                 <field name="phone" optional="show"/>
-                <field name="llmd_post_count"/>
+                <field name="llmd_posts_total" string="Jobs posted"/>
+                <field name="llmd_posts_live"/>
+                <field name="llmd_posts_pending"/>
+                <field name="llmd_posts_rejected"/>
+                <field name="llmd_posts_closed" optional="hide"/>
+                <field name="llmd_free_used"/>
+                <field name="llmd_jobs_bought"/>
+                <field name="llmd_jobs_used"/>
+                <field name="llmd_job_credits" string="Credits left"/>
+                <field name="llmd_open_text"/>
                 <field name="llmd_role" optional="hide"/>
-                <field name="llmd_role_date" string="Joined as hirer"/>
+                <field name="llmd_role_date" string="Joined as recruiter" optional="hide"/>
+                <button name="action_llmd_posts" type="object" string="Jobs" icon="fa-briefcase" class="btn-link"/>
+                <button name="action_llmd_subscriptions" type="object" string="Packages" icon="fa-credit-card" class="btn-link"/>
             </list>
         </field>
     </record>
@@ -248,6 +329,9 @@
                     <div class="oe_button_box" name="button_box">
                         <button name="action_llmd_posts" type="object" class="oe_stat_button" icon="fa-briefcase">
                             <field name="llmd_post_count" widget="statinfo" string="Jobs posted"/>
+                        </button>
+                        <button name="action_llmd_subscriptions" type="object" class="oe_stat_button" icon="fa-credit-card">
+                            <field name="llmd_job_credits" widget="statinfo" string="Credits left"/>
                         </button>
                     </div>
                     <h1><field name="name" readonly="1"/></h1>
@@ -264,6 +348,19 @@
                             <field name="website" widget="url"/>
                             <field name="llmd_linkedin" widget="url"/>
                         </group>
+                        <group string="Jobs">
+                            <field name="llmd_posts_live"/>
+                            <field name="llmd_posts_pending"/>
+                            <field name="llmd_posts_rejected"/>
+                            <field name="llmd_posts_closed"/>
+                            <field name="llmd_open_text"/>
+                        </group>
+                        <group string="Credits">
+                            <field name="llmd_free_used"/>
+                            <field name="llmd_jobs_bought"/>
+                            <field name="llmd_jobs_used"/>
+                            <field name="llmd_job_credits" string="Credits left"/>
+                        </group>
                     </group>
                 </sheet>
             </form>
@@ -279,23 +376,24 @@
                 <field name="name"/>
                 <field name="email"/>
                 <field name="company_name" string="Company"/>
-                <filter name="hirers" string="Hiring" domain="[('llmd_role', '=', 'hirer')]"/>
+                <filter name="hirers" string="Recruiters" domain="['|', ('llmd_role', '=', 'hirer'), ('llmd_is_employer', '=', True)]"/>
+                <filter name="has_credits" string="Has credits left" domain="[('llmd_job_credits', '&gt;', 0)]"/>
                 <filter name="seekers" string="Job seekers" domain="[('llmd_role', '=', 'applicant')]"/>
             </search>
         </field>
     </record>
 
     <record id="llmd_employer_action" model="ir.actions.act_window">
-        <field name="name">Employers</field>
+        <field name="name">Recruiters</field>
         <field name="res_model">res.partner</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('llmd_role', '!=', False)]</field>
+        <field name="domain">['|', ('llmd_role', '!=', False), ('llmd_is_employer', '=', True)]</field>
         <field name="context">{'search_default_hirers': 1, 'create': False}</field>
         <field name="search_view_id" ref="llmd_employer_search"/>
         <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('llmd_employer_list')}), (0, 0, {'view_mode': 'form', 'view_id': ref('llmd_employer_form')})]"/>
-        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No employers yet</p><p>People who choose "Hiring (Employer / HR)" when they sign up on the job board appear here, with their company details.</p></field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">No recruiters yet</p><p>People who sign up as "Hiring (Employer / HR)", post a job or buy a package appear here, with their jobs and credits.</p></field>
     </record>
 
-    <menuitem id="llmd_employer_menu" name="Employers" parent="llmd_job_board_menu" action="llmd_employer_action" sequence="12"
+    <menuitem id="llmd_employer_menu" name="Recruiters" parent="llmd_job_board_menu" action="llmd_employer_action" sequence="12"
               groups="hr_recruitment.group_hr_recruitment_manager,base.group_system"/>
 </odoo>

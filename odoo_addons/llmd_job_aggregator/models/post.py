@@ -62,6 +62,10 @@ class LlmdJobPost(models.Model):
     apply_how = fields.Selection([('form', 'LLM Decode application form'), ('link', "Employer's own application link")], string='How people apply', default='form')
     expires_on = fields.Date(string='Open until', copy=False, help='The post closes itself after this day.')
     reject_reason = fields.Char(string='Reason (rejected)')
+    edit_count = fields.Integer(string='Times edited', readonly=True, copy=False, help='How many times the employer edited this job (each edit sends it back to Pending review).')
+    last_edit = fields.Datetime(string='Last edited', readonly=True, copy=False, help='When the employer last edited this job.')
+    reviewed_by = fields.Many2one('res.users', string='Reviewed by', readonly=True, copy=False, help='Who of our team last approved or rejected this job.')
+    reviewed_on = fields.Datetime(string='Reviewed on', readonly=True, copy=False)
     post_department = fields.Selection(POST_DEPARTMENTS, string='Department', help='The team the job is in: the Department filter and pages (/departments/...) of the board.')
     jd_attachment_id = fields.Many2one('ir.attachment', string='Job description (PDF)', ondelete='set null', copy=False, readonly=True)
     jd_url = fields.Char(string='Job posting link', help="The employer's own page of this job (shown on the job page as Original job posting).")
@@ -180,15 +184,19 @@ class LlmdJobPost(models.Model):
     def action_approve(self):
         today = fields.Date.context_today(self)
         for rec in self.filtered(lambda r: r.post_kind and r.post_state in ('pending', 'rejected')):
-            rec.write({'post_state': 'live', 'active': True, 'posted': fields.Datetime.now(), 'reject_reason': False, 'expires_on': today + timedelta(days=POST_DAYS)})
+            rec.write({'post_state': 'live', 'active': True, 'posted': fields.Datetime.now(), 'reject_reason': False, 'expires_on': today + timedelta(days=POST_DAYS),
+                       'reviewed_by': self.env.user.id, 'reviewed_on': fields.Datetime.now()})
             rec._post_mail('Your job is live: %s' % rec.title,
                            Markup('<p>Your job <b>%s</b> was approved and is now live on the LLM Decode job board.</p><p>It stays open until %s. You see its applicants under My jobs.</p>') % (
                                rec.title, rec.expires_on))
         return True
 
     def action_reject(self):
+        missing = self.filtered(lambda r: r.post_kind == 'employer' and r.post_state in ('pending', 'live') and not (r.reject_reason or '').strip())
+        if missing:
+            raise UserError('Write the reason first (field "Reason (rejected)" under Employer): the employer sees it on My jobs and in the e-mail.')
         for rec in self.filtered(lambda r: r.post_kind == 'employer' and r.post_state in ('pending', 'live')):
-            rec.write({'post_state': 'rejected', 'active': False})
+            rec.write({'post_state': 'rejected', 'active': False, 'reviewed_by': self.env.user.id, 'reviewed_on': fields.Datetime.now()})
             if rec.post_paid and rec.poster_id:                         # a paid post we do not publish: its credit goes back to the account
                 partner = rec.poster_id.partner_id.sudo()
                 partner.llmd_job_credits = (partner.llmd_job_credits or 0) + 1
@@ -230,6 +238,16 @@ class LlmdJobPost(models.Model):
         return max(base, partner.llmd_max_open or 0)
 
     @api.model
+    def credit_summary(self, user):
+        """What an employer has: the free job (used or not), the job credits bought / used / left, and the jobs open now - for My jobs and the backend."""
+        partner = user.partner_id.sudo()
+        posts = self.sudo().with_context(active_test=False).search([('poster_id', '=', user.id), ('post_kind', '=', 'employer')])
+        free = self.env['llmd.hr.package'].free_package()
+        return {'free_total': free.limit if free else 0, 'free_used': min(len(posts.filtered(lambda p: p.post_state != 'rejected' and not p.post_paid)), free.limit if free else 0),
+                'bought': partner.llmd_jobs_bought, 'used': len(posts.filtered('post_paid')), 'left': partner.llmd_job_credits or 0,
+                'open': self.open_posts_of(user), 'max_open': self.max_open_of(user)}
+
+    @api.model
     def free_post_left(self, user):
         """The first job(s) of an account are free: the Job limit of the Free package (Job board > Packages; archived = no free job). A rejected job
         does not count."""
@@ -252,6 +270,8 @@ class LlmdJobPost(models.Model):
             vals['post_paid'] = True
             partner.llmd_job_credits -= 1
         post = self.sudo().create(vals)
+        if not partner.llmd_is_employer:
+            partner.llmd_is_employer = True
         post._notify_team_review()
         return post
 
@@ -272,7 +292,7 @@ class LlmdJobPost(models.Model):
                     raise UserError('Sending this job again uses a job credit. Buy a plan on the For companies page.')
                 partner.llmd_job_credits -= 1
                 vals['post_paid'] = True
-        vals.update(post_state='pending', active=False, reject_reason=False)
+        vals.update(post_state='pending', active=False, reject_reason=False, edit_count=(post.edit_count or 0) + 1, last_edit=fields.Datetime.now())
         post.write(vals)
         post._notify_team_review(edited=True)
         return post
@@ -289,7 +309,7 @@ class LlmdJobPost(models.Model):
         base = self.env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
         link = '%s/odoo/action-llmd_job_aggregator.llmd_job_post_employer_action/%d' % (base, self.id)
         body = Markup('<p>%s</p><p><b>%s</b> - %s<br/>%s</p><p>Posted by %s (%s%s)<br/>%s</p><p><a href="%s">Open it to approve or reject</a> '
-                      '(Job board &gt; Employer posts).</p>') % (
+                      '(Job board &gt; Job posts).</p>') % (
             'An employer edited a job - it is back in Pending review:' if edited else 'A new job is waiting for review:',
             self.title or '', self.company or '', self.location or '',
             partner.name or user.login or '-', self.contact_email or user.email or '-', (', %s' % partner.phone) if partner.phone else '',
@@ -298,7 +318,8 @@ class LlmdJobPost(models.Model):
             with self.env.cr.savepoint():
                 self.env['mail.mail'].sudo().create({
                     'subject': '%s: %s (%s)' % ('Job edited, review again' if edited else 'New job for review', self.title or '', self.company or ''),
-                    'email_to': to, 'body_html': str(body), 'auto_delete': True, 'reply_to': self.contact_email or user.email or False,
+                    'email_to': to, 'body_html': str(body), 'auto_delete': False, 'reply_to': self.contact_email or user.email or False,
+                    'llmd_kind': 'team', 'llmd_ref': 'Job %d: %s' % (self.id, self.title or ''),
                     'email_from': self.env.company.email_formatted or False})
         except Exception:
             _logger.warning('job post %s: the e-mail to the team could not be queued', self.id, exc_info=True)
@@ -352,7 +373,8 @@ class LlmdJobPost(models.Model):
             return
         try:
             with self.env.cr.savepoint():
-                self.env['mail.mail'].sudo().create({'subject': subject, 'email_to': to, 'body_html': str(body), 'auto_delete': True,
+                self.env['mail.mail'].sudo().create({'subject': subject, 'email_to': to, 'body_html': str(body), 'auto_delete': False,
+                                                     'llmd_kind': 'employer', 'llmd_ref': 'Job %d: %s' % (self.id, self.title or ''),
                                                      'email_from': self.env.company.email_formatted or self.env.user.email_formatted or False})
         except Exception:                                               # an e-mail never stops the review
             _logger.warning('job post %s: the e-mail to the employer could not be queued', self.id, exc_info=True)
