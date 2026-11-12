@@ -3,6 +3,14 @@
     <!-- the packages of the page for companies (Free, Bundle of 3, Hiring pack) and their products; created once, then the team changes them under Job board > Packages (an update never resets them) -->
     <data noupdate="1">
         <!-- the products of the paid packages: the names on the invoices (Service, sold only) -->
+        <record id="product_package_free" model="product.product">
+            <field name="name">Free Job Post – 1 Job</field>
+            <field name="default_code">LLMD-JOB-1</field>
+            <field name="type">service</field>
+            <field name="list_price">0</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+        </record>
         <record id="product_package_starter" model="product.product">
             <field name="name">Starter Hiring Pack – 3 Jobs</field>
             <field name="default_code">LLMD-JOB-3</field>
@@ -26,6 +34,7 @@
             <field name="post_limited">1</field>
             <field name="amount">0</field>
             <field name="currency_id" ref="base.INR"/>
+            <field name="product_id" ref="product_package_free"/>
         </record>
         <record id="package_bundle" model="llmd.hr.package">
             <field name="name">Bundle of 3</field>
