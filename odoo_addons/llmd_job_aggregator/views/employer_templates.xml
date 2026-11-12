@@ -135,38 +135,26 @@
                                 </ul>
                                 <a t-att-href="cta_href" class="btn o_llmd_btn_primary" data-llmd-auth="1">Post for free</a>
                             </div>
-                            <!-- the two paid cards read Job board > Packages (llmd.hr.package): name, price, jobs; an archived package is not shown -->
-                            <t t-set="pkg1" t-value="request.env.ref('llmd_job_aggregator.package_bundle', raise_if_not_found=False)"/>
-                            <t t-set="pkg2" t-value="request.env.ref('llmd_job_aggregator.package_pack', raise_if_not_found=False)"/>
-                            <t t-set="pkg1" t-value="pkg1 and pkg1.sudo().active and pkg1.sudo().plan_values()"/>
-                            <t t-set="pkg2" t-value="pkg2 and pkg2.sudo().active and pkg2.sudo().plan_values()"/>
-                            <div t-if="pkg1" class="o_llmd_emp_plan o_llmd_plan_one" data-llmd-reveal="up" data-llmd-delay="1">
-                                <span class="o_llmd_emp_badge">Recommended</span>
-                                <span class="o_llmd_plan_ic"><i class="fa fa-briefcase" aria-hidden="true"/></span>
-                                <h3 t-out="pkg1['name']"/>
-                                <p class="o_llmd_plan_for">For a few more roles</p>
-                                <p class="o_llmd_emp_price"><t t-out="pkg1['currency']"/><t t-out="'{:,}'.format(pkg1['price'])"/> <small t-out="'for %s jobs' % pkg1['jobs']"/></p>
-                                <ul>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Everything in Free</li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Use them across several roles</li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Close or reopen any job from My jobs</li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Apply on our form or your own page</li>
-                                </ul>
-                                <a t-attf-href="/jobs/plan/#{pkg1['code']}" class="btn o_llmd_btn_primary">Post <t t-out="pkg1['jobs']"/> jobs</a>
-                            </div>
-                            <div t-if="pkg2" class="o_llmd_emp_plan o_llmd_plan_team" data-llmd-reveal="up" data-llmd-delay="2">
-                                <span class="o_llmd_plan_ic"><i class="fa fa-users" aria-hidden="true"/></span>
-                                <h3 t-out="pkg2['name']"/>
-                                <p class="o_llmd_plan_for">For teams hiring for several roles</p>
-                                <p class="o_llmd_emp_price"><t t-out="pkg2['currency']"/><t t-out="'{:,}'.format(pkg2['price'])"/> <small t-out="'up to %s jobs' % pkg2['jobs']"/></p>
-                                <ul>
-                                    <li t-if="pkg1"><i class="fa fa-check" aria-hidden="true"/> Everything in <t t-out="pkg1['name']"/></li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Use it across roles and cities</li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> All applicants in one My jobs page</li>
-                                    <li><i class="fa fa-check" aria-hidden="true"/> Help from the LLM Decode team</li>
-                                </ul>
-                                <a t-attf-href="/jobs/plan/#{pkg2['code']}" class="btn o_llmd_btn_primary">Post <t t-out="pkg2['jobs']"/> jobs</a>
-                            </div>
+                            <!-- one card per paid package of Job board > Packages (active, amount above 0, in their order): name, price, jobs, open at once.
+                                 The first paid package is marked Recommended; each later one says it has everything of the one before. -->
+                            <t t-set="paid_pkgs" t-value="request.env['llmd.hr.package'].sudo().search([('amount', '&gt;', 0)])"/>
+                            <t t-foreach="paid_pkgs" t-as="pkg">
+                                <t t-set="pv" t-value="pkg.plan_values()"/>
+                                <div t-attf-class="o_llmd_emp_plan #{'o_llmd_plan_one' if pkg_first else 'o_llmd_plan_team'}" data-llmd-reveal="up" t-att-data-llmd-delay="min(pkg_index + 1, 3)">
+                                    <span t-if="pkg_first" class="o_llmd_emp_badge">Recommended</span>
+                                    <span class="o_llmd_plan_ic"><i t-attf-class="fa #{'fa-briefcase' if pkg_first else 'fa-users'}" aria-hidden="true"/></span>
+                                    <h3 t-out="pv['name']"/>
+                                    <p class="o_llmd_plan_for" t-out="'For a few more roles' if pkg_first else 'For teams hiring for several roles'"/>
+                                    <p class="o_llmd_emp_price"><t t-out="pv['currency']"/><t t-out="'{:,}'.format(pv['price'])"/> <small t-out="'for %s jobs' % pv['jobs']"/></p>
+                                    <ul>
+                                        <li><i class="fa fa-check" aria-hidden="true"/> Everything in <t t-out="'Free' if pkg_first else paid_pkgs[pkg_index - 1].name"/></li>
+                                        <li><i class="fa fa-check" aria-hidden="true"/> Up to <t t-out="pv['post_limit']"/> jobs open at the same time</li>
+                                        <li><i class="fa fa-check" aria-hidden="true"/> Close or reopen any job from My jobs</li>
+                                        <li><i class="fa fa-check" aria-hidden="true"/> All applicants in one My jobs page</li>
+                                    </ul>
+                                    <a t-attf-href="/jobs/plan/#{pv['code']}" class="btn o_llmd_btn_primary">Post <t t-out="pv['jobs']"/> jobs</a>
+                                </div>
+                            </t>
                         </div>
                         <p class="o_llmd_plans_note" data-llmd-reveal="up"><i class="fa fa-calendar" aria-hidden="true"/> Need more jobs or want to see it first? <a href="/contactus">Book a free demo</a></p>
                     </div>

@@ -31,6 +31,21 @@ FEED_ORDER = 'pinned desc, posted desc, id desc'
 class LlmdJobPosts(http.Controller):
 
     @staticmethod
+    def _llmd_hire_redirect():
+        """The pages for companies live on the job board's own website (jobs.llmdecode.ai): opened on another website (learn.llmdecode.com), a GET
+        goes there with the same path - never a form post. None when this is the right website, or no website has a "jobs." domain (a local database)."""
+        if request.httprequest.method != 'GET':
+            return None
+        hire = request.env['website.menu'].sudo()._llmd_hire_websites()
+        if not hire or request.website in hire:
+            return None
+        domain = (hire[0].domain or '').strip()
+        if not domain:
+            return None
+        base = (domain if '://' in domain else 'https://' + domain).rstrip('/')
+        return request.redirect(base + request.httprequest.full_path.rstrip('?'), code=301, local=False)
+
+    @staticmethod
     def _llmd_employer():
         """The signed-in account, or None for a visitor."""
         user = request.env.user
@@ -67,6 +82,8 @@ class LlmdJobPosts(http.Controller):
 
     @http.route('/jobs/post', type='http', auth='public', website=True, methods=['GET', 'POST'], sitemap=False)
     def llmd_post(self, **post):
+        if (moved := self._llmd_hire_redirect()):
+            return moved
         user = self._llmd_employer()
         if not user:                                                    # sign in / sign up first, in the window over the page, then back here
             if request.httprequest.method == 'POST':
@@ -81,6 +98,8 @@ class LlmdJobPosts(http.Controller):
 
     @http.route('/jobs/my/<int:post_id>/edit', type='http', auth='user', website=True, methods=['GET', 'POST'], sitemap=False)
     def llmd_edit_post(self, post_id, **post):
+        if (moved := self._llmd_hire_redirect()):
+            return moved
         """The employer edits their own job (pending, live or rejected); saving sends it to our team again."""
         user = self._llmd_employer()
         job = self._llmd_own_post(post_id, user)
@@ -180,11 +199,15 @@ class LlmdJobPosts(http.Controller):
     @http.route('/jobs/employers', type='http', auth='public', website=True, sitemap=True)
     def llmd_employers(self, **kwargs):
         """The page for companies (Post a job, how it works, the plan, questions)."""
+        if (moved := self._llmd_hire_redirect()):
+            return moved
         return self._llmd_employers_page(self._llmd_employer())
 
     @http.route('/jobs/plan/<string:plan_code>', type='http', auth='public', website=True, methods=['GET', 'POST'], sitemap=False)
     def llmd_plan_request(self, plan_code, **post):
         """The request page of a paid plan: a short contact form; our team gets in touch about the payment (nothing is paid on the website)."""
+        if (moved := self._llmd_hire_redirect()):
+            return moved
         package = request.env['llmd.hr.package'].sudo().by_code(plan_code)      # Job board > Packages: "bundle", "pack" or the package ID
         if not package:
             raise NotFound()
@@ -232,6 +255,8 @@ class LlmdJobPosts(http.Controller):
 
     @http.route('/jobs/my', type='http', auth='public', website=True, sitemap=False)
     def llmd_my_jobs(self, posted=None, edited=None, **kwargs):
+        if (moved := self._llmd_hire_redirect()):
+            return moved
         user = self._llmd_employer()
         if not user:
             return request.redirect('/web/login?redirect=/jobs/my')
