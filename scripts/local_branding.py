@@ -1,6 +1,8 @@
-"""LOCAL ONLY - the LLM Decode branding of the local test website (it starts as Odoo's demo "My Website"): the name "LLM Decode" as the header brand,
-the menu Home / Courses / Jobs Explorer / Resources / Contact us, and a footer with the same navigation. Run it in the odoo shell of the LOCAL database:
+"""LOCAL ONLY - the LLM Decode branding of the local test website (it starts as Odoo's demo "My Website"): the LLM Decode logo as the header brand (scripts/assets/llm_decode_logo.webp),
+the menu Home / Courses / Jobs Explorer (no Resources / Contact us in the header), and a footer. Copy the logo into the container first, then run it
+in the odoo shell of the LOCAL database:
 
+    docker cp scripts/assets llmd-local-odoo-1:/tmp/assets
     cat scripts/local_branding.py | docker compose --env-file .env -f docker/docker-compose.yml exec -T -e DBN=llmd_local odoo \
         sh -c 'odoo shell -d "$DBN" --db_host="$HOST" --db_user="$USER" --db_password="$PASSWORD" --no-http --log-level=warn'
 
@@ -13,15 +15,20 @@ assert env.cr.dbname == 'llmd_local', 'local_branding.py is for the local test d
 website = env['website'].sudo().get_current_website()                                                     # noqa: F821
 website.name = 'LLM Decode'
 
-# the header shows the site name (text) instead of the demo "Your Logo" image
+# the header shows the LLM Decode logo (the same image as jobs.llmdecode.ai / learn.llmdecode.com, scripts/assets/llm_decode_logo.webp)
+# instead of the demo "Your Logo" or the site name as text: first the name option off, then the logo option on (both change the same brand spot)
+import base64, os                                                                                         # noqa: E402
+LOGO = os.path.join(os.environ.get('LLMD_SCRIPTS', '/tmp'), 'assets', 'llm_decode_logo.webp')
+if os.path.exists(LOGO):
+    with open(LOGO, 'rb') as fh:
+        website.logo = base64.b64encode(fh.read())
+else:
+    print('branding: logo file not found at %s - copy scripts/assets into the container (see the docstring); the logo stays as it is' % LOGO)
 View = env['ir.ui.view'].sudo().with_context(active_test=False, website_id=website.id)                   # noqa: F821
-for key, active in (('website.option_header_brand_logo', False), ('website.option_header_brand_name', True)):
-    view = View.search([('key', '=', key)], limit=1)
-    if view and view.active != active:
-        view.write({'active': active})                                                                    # copy-on-write: only this website changes
-brand = View.search([('key', '=', 'website.option_header_brand_name'), ('website_id', '=', website.id)], limit=1)
-if brand:                                                                                                 # the demo text "My Website" -> LLM Decode
-    brand.write({'arch_db': brand.arch_db.replace('>My Website</a>', '><span>LLM Decode</span></a>')})
+for key, active in (('website.option_header_brand_name', False), ('website.option_header_brand_logo', True)):
+    for view in View.search([('key', '=', key)]):
+        if view.website_id.id in (website.id, False) and view.active != active:
+            view.with_context(website_id=website.id).write({'active': active})                          # copy-on-write: only this website changes
 
 # the menu: Home, Courses, Jobs Explorer (the job board, /jobs) - Resources and Contact us are not in the header
 Menu = env['website.menu'].sudo()                                                                         # noqa: F821
